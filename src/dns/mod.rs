@@ -1,3 +1,3 @@
 mod handler;
-mod packet;
+pub mod packet;
 mod upstream;
