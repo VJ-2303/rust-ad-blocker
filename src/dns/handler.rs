@@ -1,5 +1,8 @@
-use crate::error::{AppError, DnsError, Result};
-use std::error::Error;
+use crate::{
+    dns::cache::Cache,
+    error::{AppError, DnsError, Result},
+};
+use tracing::info;
 
 use crate::{
     blocklist::Blocklist,
@@ -10,6 +13,7 @@ pub async fn handle_query(
     packet_bytes: &[u8],
     blocklist: &Blocklist,
     upstream_addr: &str,
+    cache: &Cache,
 ) -> Result<Vec<u8>> {
     let dns_packet = DnsPacket::parse(packet_bytes)?;
 
@@ -19,14 +23,22 @@ pub async fn handle_query(
     };
 
     if blocklist.is_blocked(&raw_domain) {
-        println!("BLOCKED: {}", raw_domain);
+        info!(domain = %raw_domain, status = "BLOCKED", "Query denied by blocklist");
 
         let response = dns_packet.make_nxdomain();
         let bytes = response.serialize()?;
         Ok(bytes)
     } else {
-        println!("ALLOWED: {}", raw_domain);
+        info!(domain = %raw_domain, status = "ALLOWED", "Query allowed by blocklist");
+
+        if let Some(cached_bytes) = cache.get(&raw_domain, &packet_bytes[0..2]).await {
+            return Ok(cached_bytes);
+        }
+
         let upstream_response = upstream::forward(packet_bytes, upstream_addr).await?;
+
+        cache.put(raw_domain, upstream_response.clone()).await;
+
         Ok(upstream_response)
     }
 }
