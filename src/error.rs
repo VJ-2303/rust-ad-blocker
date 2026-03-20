@@ -8,3 +8,9 @@ pub enum ConfigError {
     #[error("Failed to parse TOML: {0}")]
     Parse(#[from] toml::de::Error),
 }
+
+#[derive(Debug, Error)]
+pub enum DnsError {
+    #[error("Failed to parse DNS packet: {0}")]
+    Parse(#[from] hickory_proto::error::ProtoError),
+}
