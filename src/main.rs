@@ -6,12 +6,10 @@ mod error;
 mod metrics;
 mod server;
 
-use std::error::Error;
-
-use crate::blocklist::Blocklist;
+use crate::{blocklist::Blocklist, error::Result};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<()> {
     let config = config::Config::load("config.toml")?;
 
     println!("Loading blocklist....");

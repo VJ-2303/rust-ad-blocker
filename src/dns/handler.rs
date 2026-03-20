@@ -1,3 +1,4 @@
+use crate::error::{AppError, DnsError, Result};
 use std::error::Error;
 
 use crate::{
@@ -9,12 +10,12 @@ pub async fn handle_query(
     packet_bytes: &[u8],
     blocklist: &Blocklist,
     upstream_addr: &str,
-) -> Result<Vec<u8>, Box<dyn Error>> {
+) -> Result<Vec<u8>> {
     let dns_packet = DnsPacket::parse(packet_bytes)?;
 
     let raw_domain = match dns_packet.get_domain() {
         Some(domain) => domain,
-        None => return Err("packet had no queries".into()),
+        None => return Err(AppError::Dns(DnsError::NoQueries)),
     };
 
     if blocklist.is_blocked(&raw_domain) {
