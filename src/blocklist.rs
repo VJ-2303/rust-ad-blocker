@@ -35,14 +35,14 @@ impl Blocklist {
         self.domains.contains(domain)
     }
     pub fn is_blocked(&self, raw_query: &str) -> bool {
-        let mut domain = raw_query.to_string();
-        if domain.ends_with('.') {
-            domain.pop();
-        }
-        self.contains(&domain)
+        let domain_to_check = if raw_query.ends_with('.') {
+            &raw_query[..raw_query.len() - 1]
+        } else {
+            raw_query
+        };
+        self.contains(domain_to_check)
     }
 
-    // A quick helper to get the count since `domains` is private now
     pub fn len(&self) -> usize {
         self.domains.len()
     }
