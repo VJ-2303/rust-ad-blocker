@@ -5,7 +5,7 @@ use std::{
 };
 
 pub struct Blocklist {
-    domains: HashSet<String>,
+    domains: HashSet<Vec<u8>>,
 }
 
 impl Blocklist {
@@ -27,23 +27,28 @@ impl Blocklist {
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
-            blocklist.domains.insert(line.to_string());
+            blocklist.domains.insert(encode_domain(line));
         }
         Ok(blocklist)
     }
-    fn contains(&self, domain: &str) -> bool {
-        self.domains.contains(domain)
-    }
-    pub fn is_blocked(&self, raw_query: &str) -> bool {
-        let domain_to_check = if raw_query.ends_with('.') {
-            &raw_query[..raw_query.len() - 1]
-        } else {
-            raw_query
-        };
-        self.contains(domain_to_check)
+    pub fn is_blocked(&self, domain_bytes: &[u8]) -> bool {
+        self.domains.contains(domain_bytes)
     }
 
     pub fn len(&self) -> usize {
         self.domains.len()
     }
+}
+
+fn encode_domain(domain: &str) -> Vec<u8> {
+    let mut bytes: Vec<u8> = Vec::new();
+    for label in domain.split('.') {
+        let len = label.len();
+        if len > 0 {
+            bytes.push(len as u8);
+            bytes.extend_from_slice(label.as_bytes());
+        }
+    }
+    bytes.push(0);
+    bytes
 }

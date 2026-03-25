@@ -3,3 +3,4 @@
 
 evil-ads.com
   trackers.net
+google.com

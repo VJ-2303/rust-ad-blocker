@@ -4,7 +4,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
 pub struct Cache {
-    store: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+    store: Arc<RwLock<HashMap<Vec<u8>, Vec<u8>>>>,
 }
 
 impl Cache {
@@ -13,7 +13,7 @@ impl Cache {
             store: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    pub async fn get(&self, domain: &str, original_id: &[u8]) -> Option<Vec<u8>> {
+    pub async fn get(&self, domain: &[u8], original_id: &[u8]) -> Option<Vec<u8>> {
         let store = self.store.read().await;
 
         if let Some(cached_response) = store.get(domain) {
@@ -26,7 +26,7 @@ impl Cache {
         }
         None
     }
-    pub async fn put(&self, domain: String, response_bytes: Vec<u8>) {
+    pub async fn put(&self, domain: Vec<u8>, response_bytes: Vec<u8>) {
         let mut store = self.store.write().await;
 
         store.insert(domain, response_bytes);
