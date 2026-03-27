@@ -1,6 +1,7 @@
 use crate::{
     dns::cache::Cache,
     error::{AppError, DnsError, Result},
+    metrics::Metrics,
 };
 use tracing::info;
 
@@ -14,7 +15,11 @@ pub async fn handle_query(
     blocklist: &Blocklist,
     upstream_addr: &str,
     cache: &Cache,
+    metrics: &Metrics,
 ) -> Result<Vec<u8>> {
+    metrics
+        .total_queries
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let mut i = 12;
     while packet_bytes[i] != 0 {
         i += 1
@@ -22,6 +27,9 @@ pub async fn handle_query(
     let domain_bytes = &packet_bytes[12..=i];
 
     if blocklist.is_blocked(domain_bytes).await {
+        metrics
+            .blocked_queries
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dns_packet = DnsPacket::parse(packet_bytes)?;
 
         let raw_domain = match dns_packet.get_domain() {

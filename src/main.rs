@@ -6,10 +6,11 @@ mod error;
 mod metrics;
 mod server;
 
+use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-use crate::{blocklist::Blocklist, dns::cache::Cache, error::Result};
+use crate::{blocklist::Blocklist, dns::cache::Cache, error::Result, metrics::Metrics};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,7 +23,7 @@ async fn main() -> Result<()> {
 
     info!("Loading blocklist...");
 
-    let blocklist = Blocklist::load(&config.blocklist_path)?;
+    let blocklist = Arc::new(Blocklist::load(&config.blocklist_path)?);
 
     info!(
         domain_count = blocklist.len().await,
@@ -32,11 +33,35 @@ async fn main() -> Result<()> {
     info!(
         listen_addr = %config.listen_addr,
         upstream = %config.upstream_dns,
-        "Starting RustHole DNS Server"
+        "Starting RustHoldatae DNS Server"
     );
 
     let cache = Cache::new();
 
-    server::run(&config.listen_addr, &config.upstream_dns, blocklist, cache).await?;
+    let metrics = Arc::new(Metrics::default());
+
+    let task_listen = config.listen_addr.clone();
+    let task_upstream = config.upstream_dns.clone();
+
+    tokio::spawn(async move {
+        if let Err(e) = server::run(
+            &task_listen,
+            &task_upstream,
+            blocklist.clone(),
+            cache.clone(),
+            metrics.clone(),
+        )
+        .await
+        {
+            tracing::error!("DNS server crashed: {}", e);
+        }
+    });
+
+    tracing::info!("Starting Admin Web API on 0.0.0.0:8080");
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+
+    axum::serve(listener, admin::routes::app()).await?;
+
     Ok(())
 }
