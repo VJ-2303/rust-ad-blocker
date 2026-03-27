@@ -6,8 +6,8 @@ mod error;
 mod metrics;
 mod server;
 
-use std::sync::Arc;
-use tracing::{error, info};
+use std::{sync::Arc, time::Duration};
+use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
@@ -67,19 +67,28 @@ async fn main() -> Result<()> {
 
     tokio::spawn(async move {
         loop {
-            match fetch_remote_blocklist(
-                "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
-            )
-            .await
-            {
-                Ok(new_blocklist) => {
-                    task_blocklist.update_list(new_blocklist).await;
-                    info!("Successfully updated blocklists domains")
+            let mut success = false;
+            for attempt in 1..=3 {
+                if let Ok(new_list) = fetch_remote_blocklist(
+                    "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+                )
+                .await
+                {
+                    success = true;
+                    task_blocklist.update_list(new_list).await;
+                    break;
                 }
-                Err(e) => {
-                    error!(error = %e, "Failed to updated blocklist");
-                }
+                warn!("Attempt {} failed, retrying in 10s...", attempt);
+                tokio::time::sleep(Duration::from_secs(10)).await;
             }
+
+            if success {
+                info!("Blocklist fetched from the internet successfully");
+            } else {
+                error!("Failed to fetch blocklist from internet");
+            }
+
+            tokio::time::sleep(Duration::from_secs(86400)).await;
         }
     });
 

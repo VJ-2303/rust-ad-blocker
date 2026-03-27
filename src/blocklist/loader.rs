@@ -13,7 +13,15 @@ pub async fn fetch_remote_blocklist(url: &str) -> Result<HashSet<Vec<u8>>, AppEr
         if line.starts_with('#') || line.is_empty() {
             continue;
         }
-        blocklist.insert(encode_domain(line));
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let domain = parts[1];
+
+            if domain == "localhost" || domain == "local" || domain == "broadcasthost" {
+                continue;
+            }
+            blocklist.insert(encode_domain(domain));
+        }
     }
     Ok(blocklist)
 }

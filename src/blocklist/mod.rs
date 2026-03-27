@@ -8,7 +8,8 @@ pub mod loader;
 use tokio::sync::RwLock;
 
 pub struct Blocklist {
-    domains: RwLock<HashSet<Vec<u8>>>,
+    pub remote_domains: RwLock<HashSet<Vec<u8>>>,
+    pub custom_domains: RwLock<HashSet<Vec<u8>>>,
 }
 
 impl Blocklist {
@@ -28,24 +29,22 @@ impl Blocklist {
             domains.insert(encode_domain(line));
         }
         Ok(Self {
-            domains: RwLock::new(domains),
+            custom_domains: RwLock::new(domains),
+            remote_domains: RwLock::new(HashSet::new()),
         })
     }
     pub async fn is_blocked(&self, domain_bytes: &[u8]) -> bool {
-        let guard = self.domains.read().await;
-        guard.contains(domain_bytes)
+        if self.custom_domains.read().await.contains(domain_bytes) {
+            return true;
+        }
+        self.remote_domains.read().await.contains(domain_bytes)
     }
 
     pub async fn len(&self) -> usize {
-        self.domains.read().await.len()
-    }
-    pub async fn add_domain(&self, domain: &str) {
-        let encoded_domain = encode_domain(domain);
-        let mut guard = self.domains.write().await;
-        guard.insert(encoded_domain);
+        self.custom_domains.read().await.len() + self.remote_domains.read().await.len()
     }
     pub async fn update_list(&self, new_domains: HashSet<Vec<u8>>) {
-        let mut guard = self.domains.write().await;
+        let mut guard = self.remote_domains.write().await;
         *guard = new_domains;
     }
 }
