@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
     let blocklist = Blocklist::load(&config.blocklist_path)?;
 
     info!(
-        domain_count = blocklist.len(),
+        domain_count = blocklist.len().await,
         "Successfully loaded blocklist"
     );
 

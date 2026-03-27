@@ -21,7 +21,7 @@ pub async fn handle_query(
     }
     let domain_bytes = &packet_bytes[12..=i];
 
-    if blocklist.is_blocked(domain_bytes) {
+    if blocklist.is_blocked(domain_bytes).await {
         let dns_packet = DnsPacket::parse(packet_bytes)?;
 
         let raw_domain = match dns_packet.get_domain() {

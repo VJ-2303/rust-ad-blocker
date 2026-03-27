@@ -4,21 +4,18 @@ use std::{
     io::{BufRead, BufReader},
 };
 
+use tokio::sync::RwLock;
+
 pub struct Blocklist {
-    domains: HashSet<Vec<u8>>,
+    domains: RwLock<HashSet<Vec<u8>>>,
 }
 
 impl Blocklist {
-    pub fn new() -> Self {
-        Self {
-            domains: HashSet::new(),
-        }
-    }
     pub fn load(path: &str) -> std::io::Result<Self> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
 
-        let mut blocklist = Self::new();
+        let mut domains = HashSet::new();
 
         for line in reader.lines() {
             let line = line?;
@@ -27,16 +24,24 @@ impl Blocklist {
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
-            blocklist.domains.insert(encode_domain(line));
+            domains.insert(encode_domain(line));
         }
-        Ok(blocklist)
+        Ok(Self {
+            domains: RwLock::new(domains),
+        })
     }
-    pub fn is_blocked(&self, domain_bytes: &[u8]) -> bool {
-        self.domains.contains(domain_bytes)
+    pub async fn is_blocked(&self, domain_bytes: &[u8]) -> bool {
+        let guard = self.domains.read().await;
+        guard.contains(domain_bytes)
     }
 
-    pub fn len(&self) -> usize {
-        self.domains.len()
+    pub async fn len(&self) -> usize {
+        self.domains.read().await.len()
+    }
+    pub async fn add_domain(&self, domain: &str) {
+        let encoded_domain = encode_domain(domain);
+        let mut guard = self.domains.write().await;
+        guard.insert(encoded_domain);
     }
 }
 
