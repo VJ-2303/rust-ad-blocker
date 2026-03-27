@@ -24,6 +24,8 @@ async fn main() -> Result<()> {
     info!("Loading blocklist...");
 
     let blocklist = Arc::new(Blocklist::load(&config.blocklist_path)?);
+    let cache = Cache::new();
+    let metrics = Arc::new(Metrics::default());
 
     info!(
         domain_count = blocklist.len().await,
@@ -36,20 +38,19 @@ async fn main() -> Result<()> {
         "Starting RustHoldatae DNS Server"
     );
 
-    let cache = Cache::new();
-
-    let metrics = Arc::new(Metrics::default());
-
     let task_listen = config.listen_addr.clone();
     let task_upstream = config.upstream_dns.clone();
+    let task_blocklist = blocklist.clone();
+    let task_cache = cache.clone();
+    let task_metrics = metrics.clone();
 
     tokio::spawn(async move {
         if let Err(e) = server::run(
             &task_listen,
             &task_upstream,
-            blocklist.clone(),
-            cache.clone(),
-            metrics.clone(),
+            task_blocklist,
+            task_cache,
+            task_metrics,
         )
         .await
         {
