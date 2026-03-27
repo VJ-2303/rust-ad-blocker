@@ -13,3 +13,4 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 axum = "0.7"
 hickory-proto = "0.24"
+reqwest = "0.13.2"

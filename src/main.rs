@@ -7,10 +7,15 @@ mod metrics;
 mod server;
 
 use std::sync::Arc;
-use tracing::info;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
-use crate::{blocklist::Blocklist, dns::cache::Cache, error::Result, metrics::Metrics};
+use crate::{
+    blocklist::{Blocklist, loader::fetch_remote_blocklist},
+    dns::cache::Cache,
+    error::Result,
+    metrics::Metrics,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -55,6 +60,26 @@ async fn main() -> Result<()> {
         .await
         {
             tracing::error!("DNS server crashed: {}", e);
+        }
+    });
+
+    let task_blocklist = blocklist.clone();
+
+    tokio::spawn(async move {
+        loop {
+            match fetch_remote_blocklist(
+                "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+            )
+            .await
+            {
+                Ok(new_blocklist) => {
+                    task_blocklist.update_list(new_blocklist).await;
+                    info!("Successfully updated blocklists domains")
+                }
+                Err(e) => {
+                    error!(error = %e, "Failed to updated blocklist");
+                }
+            }
         }
     });
 

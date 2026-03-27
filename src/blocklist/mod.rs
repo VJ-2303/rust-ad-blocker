@@ -3,6 +3,7 @@ use std::{
     fs::File,
     io::{BufRead, BufReader},
 };
+pub mod loader;
 
 use tokio::sync::RwLock;
 
@@ -43,9 +44,13 @@ impl Blocklist {
         let mut guard = self.domains.write().await;
         guard.insert(encoded_domain);
     }
+    pub async fn update_list(&self, new_domains: HashSet<Vec<u8>>) {
+        let mut guard = self.domains.write().await;
+        *guard = new_domains;
+    }
 }
 
-fn encode_domain(domain: &str) -> Vec<u8> {
+pub(crate) fn encode_domain(domain: &str) -> Vec<u8> {
     let mut bytes: Vec<u8> = Vec::new();
     for label in domain.split('.') {
         let len = label.len();

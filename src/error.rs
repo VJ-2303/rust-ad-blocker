@@ -14,6 +14,9 @@ pub enum AppError {
 
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("Network error: {0}")]
+    Network(#[from] reqwest::Error),
 }
 
 // 3. THE DEPARTMENT ERRORS
