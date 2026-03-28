@@ -1,4 +1,4 @@
 listen_addr = "0.0.0.0:8053"
-upstream_dns = "1.1.1.1:53"
+upstream_dns = "8.8.8.8:53"
 blocklist_path = "blocklists/default.txt"
 log_level = "info"

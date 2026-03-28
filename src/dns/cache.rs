@@ -23,11 +23,10 @@ impl Cache {
         }
     }
     pub async fn get(&self, domain: &[u8], original_id: &[u8]) -> Option<Vec<u8>> {
-        let mut store = self.store.write().await;
+        let store = self.store.read().await;
 
         if let Some(cached_entry) = store.get(domain) {
             if Instant::now() > cached_entry.expires_at {
-                store.remove(domain);
                 return None;
             }
             let mut response = cached_entry.response_bytes.clone();
