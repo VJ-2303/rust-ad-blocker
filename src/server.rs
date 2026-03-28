@@ -7,50 +7,33 @@ use crate::dns::upstream::UpstreamMultiplexer;
 use crate::error::Result;
 use crate::metrics::Metrics;
 use bytes::BytesMut;
-use tokio::net::UdpSocket;
 use tracing::error;
 
-pub async fn run(
-    listen_addr: &str,
-    upstream_addr: &str,
-    blocklist: Arc<Blocklist>,
-    cache: Cache,
-    metrics: Arc<Metrics>,
-) -> Result<()> {
-    let socket = Arc::new(UdpSocket::bind(listen_addr).await?);
-    let shared_upstream = Arc::new(upstream_addr.to_string());
+#[derive(Clone)]
+pub struct ServerState {
+    pub socket: Arc<tokio::net::UdpSocket>,
+    pub blocklist: Arc<Blocklist>,
+    pub cache: Cache,
+    pub metrics: Arc<Metrics>,
+    pub multiplexer: UpstreamMultiplexer,
+    pub upstream_addr: Arc<String>,
+}
 
-    let upstream_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
-    let multiplexer = UpstreamMultiplexer::new(upstream_socket);
-
+pub async fn run(state: ServerState) -> Result<()> {
     let mut buf = BytesMut::with_capacity(65536);
 
     loop {
         buf.reserve(4096);
-        let (len, addr) = socket.recv_buf_from(&mut buf).await.unwrap();
+        let (len, addr) = state.socket.recv_buf_from(&mut buf).await.unwrap();
 
         let payload: BytesMut = buf.split_to(len);
 
-        let task_socket = socket.clone();
-        let task_blocklist = blocklist.clone();
-        let task_upstream = shared_upstream.clone();
-        let task_cache = cache.clone();
-        let task_metrics = metrics.clone();
-        let task_multiplexer = multiplexer.clone();
+        let task_state = state.clone();
 
         tokio::spawn(async move {
-            match handle_query(
-                payload,
-                &task_blocklist,
-                &task_upstream,
-                &task_cache,
-                &task_metrics,
-                &task_multiplexer,
-            )
-            .await
-            {
+            match handle_query(payload, &task_state).await {
                 Ok(response_bytes) => {
-                    if let Err(e) = task_socket.send_to(&response_bytes, addr).await {
+                    if let Err(e) = task_state.socket.send_to(&response_bytes, addr).await {
                         error!(client_ip = %addr, error = %e, "Failed to send response");
                     }
                 }

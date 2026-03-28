@@ -7,15 +7,17 @@ mod metrics;
 mod server;
 
 use std::{sync::Arc, time::Duration};
+use tokio::net::UdpSocket;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
     admin::state::AppState,
     blocklist::{Blocklist, loader::fetch_remote_blocklist},
-    dns::cache::Cache,
+    dns::{cache::Cache, upstream::UpstreamMultiplexer},
     error::Result,
     metrics::Metrics,
+    server::ServerState,
 };
 
 #[tokio::main]
@@ -32,9 +34,21 @@ async fn main() -> Result<()> {
     let blocklist = Arc::new(Blocklist::load(&config.blocklist_path)?);
     let cache = Cache::new();
     let metrics = Arc::new(Metrics::default());
+    let socket = Arc::new(UdpSocket::bind(&config.listen_addr).await?);
+    let multiplexer = UpstreamMultiplexer::new(Arc::new(UdpSocket::bind("0.0.0.0:0").await?));
+    let upstream_addr = Arc::new(config.upstream_dns.clone());
+
+    let state: ServerState = ServerState {
+        socket,
+        blocklist,
+        cache,
+        metrics,
+        multiplexer,
+        upstream_addr,
+    };
 
     info!(
-        domain_count = blocklist.len().await,
+        domain_count = state.blocklist.len().await,
         "Successfully loaded blocklist"
     );
 
@@ -44,27 +58,15 @@ async fn main() -> Result<()> {
         "Starting RustHoldatae DNS Server"
     );
 
-    let task_listen = config.listen_addr.clone();
-    let task_upstream = config.upstream_dns.clone();
-    let task_blocklist = blocklist.clone();
-    let task_cache = cache.clone();
-    let task_metrics = metrics.clone();
+    let task_state = state.clone();
 
     tokio::spawn(async move {
-        if let Err(e) = server::run(
-            &task_listen,
-            &task_upstream,
-            task_blocklist,
-            task_cache,
-            task_metrics,
-        )
-        .await
-        {
+        if let Err(e) = server::run(task_state).await {
             tracing::error!("DNS server crashed: {}", e);
         }
     });
 
-    let task_blocklist = blocklist.clone();
+    let task_blocklist = state.blocklist.clone();
 
     tokio::spawn(async move {
         loop {
@@ -93,7 +95,7 @@ async fn main() -> Result<()> {
         }
     });
 
-    let task_cache = cache.clone();
+    let task_cache = state.cache.clone();
 
     tokio::spawn(async move {
         loop {
@@ -107,8 +109,8 @@ async fn main() -> Result<()> {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
 
     let app_state = AppState {
-        metrics: metrics.clone(),
-        blocklist: blocklist.clone(),
+        metrics: state.metrics.clone(),
+        blocklist: state.blocklist.clone(),
     };
 
     axum::serve(listener, admin::routes::app(app_state)).await?;
