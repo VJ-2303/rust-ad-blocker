@@ -3,8 +3,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-
-use anyhow::Ok;
 use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
@@ -48,5 +46,11 @@ impl Cache {
             expires_at: Instant::now() + Duration::from_secs(300),
         };
         store.insert(domain, entry);
+    }
+    pub async fn clean_expired(&self) {
+        let mut store = self.store.write().await;
+        let now = Instant::now();
+
+        store.retain(|_domain, entry| entry.expires_at > now);
     }
 }

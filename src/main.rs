@@ -92,6 +92,15 @@ async fn main() -> Result<()> {
         }
     });
 
+    let task_cache = cache.clone();
+
+    tokio::spawn(async move {
+        loop {
+            task_cache.clean_expired().await;
+            tokio::time::sleep(Duration::from_secs(300)).await;
+        }
+    });
+
     tracing::info!("Starting Admin Web API on 0.0.0.0:8080");
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
