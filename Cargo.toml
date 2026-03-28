@@ -3,6 +3,10 @@ name = "AdBloacker"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "loadtest"
+path = "src/bin/loadtest.rs"
+
 [dependencies]
 tokio = { version = "1.30", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }

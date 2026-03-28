@@ -8,10 +8,8 @@ use std::{
 };
 
 use bytes::{Bytes, BytesMut};
-use tokio::{
-    net::UdpSocket,
-    sync::{Mutex, oneshot},
-};
+use std::sync::Mutex;
+use tokio::{net::UdpSocket, sync::oneshot};
 use tracing::error;
 
 use crate::error::{AppError, Result};
@@ -46,7 +44,7 @@ impl UpstreamMultiplexer {
                         let response = buf.split_to(len);
                         let id = u16::from_be_bytes([response[0], response[1]]);
 
-                        let mut map = pending.lock().await;
+                        let mut map = pending.lock().unwrap();
 
                         if let Some(sender) = map.remove(&id) {
                             let _ = sender.send(response);
@@ -71,7 +69,7 @@ impl UpstreamMultiplexer {
         let (tx, rx) = oneshot::channel();
 
         {
-            let mut map = self.pending.lock().await;
+            let mut map = self.pending.lock().unwrap();
             map.insert(internal_id, tx);
         }
 
@@ -87,7 +85,7 @@ impl UpstreamMultiplexer {
             Ok(Err(_)) => Err(AppError::Dns(crate::error::DnsError::NoQueries)),
 
             Err(_) => {
-                let mut map = self.pending.lock().await;
+                let mut map = self.pending.lock().unwrap();
                 map.remove(&internal_id);
 
                 Err(AppError::Io(Error::new(
