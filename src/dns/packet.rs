@@ -30,12 +30,12 @@ impl DnsPacket {
         }
         DnsPacket { inner: response }
     }
-    pub fn get_domain(&self) -> Option<String> {
-        self.inner
-            .queries()
-            .first()
-            .map(|query| query.name().to_string())
-    }
+    // pub fn get_domain(&self) -> Option<String> {
+    //     self.inner
+    //         .queries()
+    //         .first()
+    //         .map(|query| query.name().to_string())
+    // }
     pub fn get_ttl(&self) -> u32 {
         self.inner
             .answers()

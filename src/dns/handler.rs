@@ -1,22 +1,24 @@
 use std::time::Instant;
 
+use bytes::{Bytes, BytesMut};
+
 use crate::{
     dns::{cache::Cache, upstream::UpstreamMultiplexer},
-    error::{AppError, DnsError, Result},
+    error::Result,
     metrics::Metrics,
 };
-use tracing::info;
+// use tracing::info;
 
 use crate::{blocklist::Blocklist, dns::packet::DnsPacket};
 
 pub async fn handle_query(
-    packet_bytes: Vec<u8>,
+    packet_bytes: BytesMut,
     blocklist: &Blocklist,
     upstream_addr: &str,
     cache: &Cache,
     metrics: &Metrics,
     multiplexer: &UpstreamMultiplexer,
-) -> Result<Vec<u8>> {
+) -> Result<Bytes> {
     metrics
         .total_queries
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -24,39 +26,37 @@ pub async fn handle_query(
     while packet_bytes[i] != 0 {
         i += 1
     }
-    let domain_bytes = &packet_bytes[12..=i];
+    let domain_bytes = packet_bytes[12..=i].to_vec();
 
-    if blocklist.is_blocked(domain_bytes).await {
+    if blocklist.is_blocked(&domain_bytes).await {
         metrics
             .blocked_queries
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dns_packet = DnsPacket::parse(&packet_bytes)?;
 
-        let raw_domain = match dns_packet.get_domain() {
-            Some(domain) => domain,
-            None => return Err(AppError::Dns(DnsError::NoQueries)),
-        };
+        // let raw_domain = match dns_packet.get_domain() {
+        //     Some(domain) => domain,
+        //     None => return Err(AppError::Dns(DnsError::NoQueries)),
+        // };
 
-        info!(domain = %raw_domain, status = "BLOCKED", "Query denied by blocklist");
+        // info!(domain = %raw_domain, status = "BLOCKED", "Query denied by blocklist");
 
         let response = dns_packet.make_nxdomain();
         let bytes = response.serialize()?;
-        Ok(bytes)
+        Ok(bytes::Bytes::from(bytes))
     } else {
-        if let Some(cached_bytes) = cache.get(domain_bytes, &packet_bytes[0..2]).await {
+        if let Some(cached_bytes) = cache.get(&domain_bytes, &packet_bytes[0..2]).await {
             metrics
                 .cache_hits
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            return Ok(cached_bytes);
+            return Ok(bytes::Bytes::from(cached_bytes));
         }
         metrics
             .cache_misses
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         let start_time = Instant::now();
-        let upstream_result = multiplexer
-            .forward(packet_bytes.clone(), upstream_addr)
-            .await;
+        let upstream_result = multiplexer.forward(packet_bytes, upstream_addr).await;
         let elapsed_ms = start_time.elapsed().as_millis() as u64;
 
         match upstream_result {
@@ -71,11 +71,7 @@ pub async fn handle_query(
                 let parsed = DnsPacket::parse(&upstream_response)?;
 
                 cache
-                    .put(
-                        domain_bytes.to_vec(),
-                        upstream_response.clone(),
-                        parsed.get_ttl(),
-                    )
+                    .put(domain_bytes, upstream_response.to_vec(), parsed.get_ttl())
                     .await;
 
                 Ok(upstream_response)

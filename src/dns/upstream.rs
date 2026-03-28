@@ -7,6 +7,7 @@ use std::{
     },
 };
 
+use bytes::{Bytes, BytesMut};
 use tokio::{
     net::UdpSocket,
     sync::{Mutex, oneshot},
@@ -15,7 +16,7 @@ use tracing::error;
 
 use crate::error::{AppError, Result};
 
-type PendingMap = Arc<Mutex<HashMap<u16, oneshot::Sender<Vec<u8>>>>>;
+type PendingMap = Arc<Mutex<HashMap<u16, oneshot::Sender<BytesMut>>>>;
 
 #[derive(Clone)]
 pub struct UpstreamMultiplexer {
@@ -35,18 +36,20 @@ impl UpstreamMultiplexer {
             next_id,
         };
 
-        tokio::spawn(async move {
-            let mut buf = [0u8; 4096];
+        let mut buf = BytesMut::with_capacity(65536);
 
+        tokio::spawn(async move {
             loop {
-                match socket.recv_from(&mut buf).await {
+                buf.reserve(4096);
+                match socket.recv_buf_from(&mut buf).await {
                     Ok((len, _addr)) => {
-                        let id = u16::from_be_bytes([buf[0], buf[1]]);
+                        let response = buf.split_to(len);
+                        let id = u16::from_be_bytes([response[0], response[1]]);
 
                         let mut map = pending.lock().await;
 
                         if let Some(sender) = map.remove(&id) {
-                            let _ = sender.send(buf[..len].to_vec());
+                            let _ = sender.send(response);
                         }
                     }
                     Err(e) => error!("Mainlman error receiving from upstream: {}", e),
@@ -55,7 +58,7 @@ impl UpstreamMultiplexer {
         });
         multiplexer
     }
-    pub async fn forward(&self, mut query_bytes: Vec<u8>, upstream_addr: &str) -> Result<Vec<u8>> {
+    pub async fn forward(&self, mut query_bytes: BytesMut, upstream_addr: &str) -> Result<Bytes> {
         let original_id_0 = query_bytes[0];
         let original_id_1 = query_bytes[1];
 
@@ -79,7 +82,7 @@ impl UpstreamMultiplexer {
                 response[0] = original_id_0;
                 response[1] = original_id_1;
 
-                Ok(response)
+                Ok(response.freeze())
             }
             Ok(Err(_)) => Err(AppError::Dns(crate::error::DnsError::NoQueries)),
 

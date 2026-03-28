@@ -6,6 +6,7 @@ use crate::dns::handler::handle_query;
 use crate::dns::upstream::UpstreamMultiplexer;
 use crate::error::Result;
 use crate::metrics::Metrics;
+use bytes::BytesMut;
 use tokio::net::UdpSocket;
 use tracing::error;
 
@@ -22,18 +23,14 @@ pub async fn run(
     let upstream_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let multiplexer = UpstreamMultiplexer::new(upstream_socket);
 
-    let mut buf = [0u8; 512];
+    let mut buf = BytesMut::with_capacity(65536);
 
     loop {
-        let (len, addr) = match socket.recv_from(&mut buf).await {
-            Ok(result) => result,
-            Err(e) => {
-                error!(error = %e, "Failed to receive packet");
-                continue;
-            }
-        };
+        buf.reserve(4096);
+        let (len, addr) = socket.recv_buf_from(&mut buf).await.unwrap();
 
-        let payload = buf[..len].to_vec();
+        let payload: BytesMut = buf.split_to(len);
+
         let task_socket = socket.clone();
         let task_blocklist = blocklist.clone();
         let task_upstream = shared_upstream.clone();
