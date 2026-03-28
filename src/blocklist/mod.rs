@@ -5,10 +5,11 @@ use std::{
 };
 pub mod loader;
 
-use tokio::{io::AsyncWriteExt, sync::RwLock};
+use parking_lot::RwLock;
+use tokio::io::AsyncWriteExt;
 
 pub struct Blocklist {
-    pub remote_domains: RwLock<HashSet<Vec<u8>>>,
+    pub all_domains: RwLock<HashSet<Vec<u8>>>,
     pub custom_domains: RwLock<HashSet<Vec<u8>>>,
     pub custom_path: String,
 }
@@ -31,19 +32,16 @@ impl Blocklist {
         }
         Ok(Self {
             custom_domains: RwLock::new(domains),
-            remote_domains: RwLock::new(HashSet::new()),
+            all_domains: RwLock::new(HashSet::new()),
             custom_path: path.to_string(),
         })
     }
     pub async fn is_blocked(&self, domain_bytes: &[u8]) -> bool {
-        if self.custom_domains.read().await.contains(domain_bytes) {
-            return true;
-        }
-        self.remote_domains.read().await.contains(domain_bytes)
+        self.all_domains.read().contains(domain_bytes)
     }
 
     pub async fn get_custom_domains(&self) -> Vec<String> {
-        let guard = self.custom_domains.read().await;
+        let guard = self.custom_domains.read();
         guard.iter().map(|bytes| decode_domain(bytes)).collect()
     }
 
@@ -52,7 +50,7 @@ impl Blocklist {
         let encoded = encode_domain(&domain);
 
         {
-            let mut guard = self.custom_domains.write().await;
+            let mut guard = self.custom_domains.write();
             if !guard.insert(encoded) {
                 return Ok(());
             }
@@ -68,11 +66,13 @@ impl Blocklist {
     }
 
     pub async fn len(&self) -> usize {
-        self.custom_domains.read().await.len() + self.remote_domains.read().await.len()
+        self.all_domains.read().len()
     }
-    pub async fn update_list(&self, new_domains: HashSet<Vec<u8>>) {
-        let mut guard = self.remote_domains.write().await;
-        *guard = new_domains;
+    pub async fn update_list(&self, remote: HashSet<Vec<u8>>) {
+        let custom = self.custom_domains.read().clone();
+        let mut all = remote;
+        all.extend(custom);
+        *self.all_domains.write() = all;
     }
 }
 

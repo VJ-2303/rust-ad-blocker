@@ -75,7 +75,7 @@ impl UpstreamMultiplexer {
 
         self.socket.send_to(&query_bytes, upstream_addr).await?;
 
-        match tokio::time::timeout(std::time::Duration::from_secs(2), rx).await {
+        match tokio::time::timeout(std::time::Duration::from_secs(4), rx).await {
             Ok(Ok(mut response)) => {
                 response[0] = original_id_0;
                 response[1] = original_id_1;

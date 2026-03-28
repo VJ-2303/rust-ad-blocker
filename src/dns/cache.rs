@@ -1,13 +1,13 @@
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::sync::RwLock;
+
+use dashmap::DashMap;
 
 #[derive(Debug, Clone)]
 pub struct Cache {
-    store: Arc<RwLock<HashMap<Vec<u8>, CacheEntry>>>,
+    store: Arc<DashMap<Vec<u8>, CacheEntry>>,
 }
 
 #[derive(Debug, Clone)]
@@ -19,13 +19,11 @@ pub struct CacheEntry {
 impl Cache {
     pub fn new() -> Self {
         Self {
-            store: Arc::new(RwLock::new(HashMap::new())),
+            store: Arc::new(DashMap::new()),
         }
     }
     pub async fn get(&self, domain: &[u8], original_id: &[u8]) -> Option<Vec<u8>> {
-        let store = self.store.read().await;
-
-        if let Some(cached_entry) = store.get(domain) {
+        if let Some(cached_entry) = self.store.get(domain) {
             if Instant::now() > cached_entry.expires_at {
                 return None;
             }
@@ -38,18 +36,16 @@ impl Cache {
         None
     }
     pub async fn put(&self, domain: Vec<u8>, response_bytes: Vec<u8>, ttl: u32) {
-        let mut store = self.store.write().await;
-
-        let entry = CacheEntry {
-            response_bytes,
-            expires_at: Instant::now() + Duration::from_secs(ttl as u64),
-        };
-        store.insert(domain, entry);
+        self.store.insert(
+            domain,
+            CacheEntry {
+                response_bytes,
+                expires_at: Instant::now() + Duration::from_secs(ttl as u64),
+            },
+        );
     }
     pub async fn clean_expired(&self) {
-        let mut store = self.store.write().await;
         let now = Instant::now();
-
-        store.retain(|_domain, entry| entry.expires_at > now);
+        self.store.retain(|_domain, entry| entry.expires_at > now);
     }
 }
