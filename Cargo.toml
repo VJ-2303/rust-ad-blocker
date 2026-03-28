@@ -11,6 +11,6 @@ thiserror = "1.0"
 anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-axum = "0.7"
+axum = { version = "0.7", features = ["macros"] }
 hickory-proto = "0.24"
 reqwest = "0.13.2"

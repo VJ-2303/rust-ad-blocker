@@ -11,6 +11,7 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
+    admin::state::AppState,
     blocklist::{Blocklist, loader::fetch_remote_blocklist},
     dns::cache::Cache,
     error::Result,
@@ -105,7 +106,12 @@ async fn main() -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
 
-    axum::serve(listener, admin::routes::app(metrics)).await?;
+    let app_state = AppState {
+        metrics: metrics.clone(),
+        blocklist: blocklist.clone(),
+    };
+
+    axum::serve(listener, admin::routes::app(app_state)).await?;
 
     Ok(())
 }

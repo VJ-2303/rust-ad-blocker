@@ -5,11 +5,12 @@ use std::{
 };
 pub mod loader;
 
-use tokio::sync::RwLock;
+use tokio::{io::AsyncWriteExt, sync::RwLock};
 
 pub struct Blocklist {
     pub remote_domains: RwLock<HashSet<Vec<u8>>>,
     pub custom_domains: RwLock<HashSet<Vec<u8>>>,
+    pub custom_path: String,
 }
 
 impl Blocklist {
@@ -31,6 +32,7 @@ impl Blocklist {
         Ok(Self {
             custom_domains: RwLock::new(domains),
             remote_domains: RwLock::new(HashSet::new()),
+            custom_path: path.to_string(),
         })
     }
     pub async fn is_blocked(&self, domain_bytes: &[u8]) -> bool {
@@ -38,6 +40,31 @@ impl Blocklist {
             return true;
         }
         self.remote_domains.read().await.contains(domain_bytes)
+    }
+
+    pub async fn get_custom_domains(&self) -> Vec<String> {
+        let guard = self.custom_domains.read().await;
+        guard.iter().map(|bytes| decode_domain(bytes)).collect()
+    }
+
+    pub async fn add_custom_domain(&self, domain: &str) -> std::io::Result<()> {
+        let domain = domain.trim().to_lowercase();
+        let encoded = encode_domain(&domain);
+
+        {
+            let mut guard = self.custom_domains.write().await;
+            if !guard.insert(encoded) {
+                return Ok(());
+            }
+        }
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.custom_path)
+            .await?;
+
+        file.write_all(format!("\n{}", domain).as_bytes()).await?;
+        Ok(())
     }
 
     pub async fn len(&self) -> usize {
@@ -60,4 +87,29 @@ pub(crate) fn encode_domain(domain: &str) -> Vec<u8> {
     }
     bytes.push(0);
     bytes
+}
+
+pub(crate) fn decode_domain(bytes: &[u8]) -> String {
+    let mut domain = String::new();
+
+    let mut i = 0;
+
+    while i < bytes.len() {
+        let len = bytes[i] as usize;
+        if len == 0 {
+            break;
+        }
+        i += 1;
+        if i + len > bytes.len() {
+            break;
+        }
+        if !domain.is_empty() {
+            domain.push('.');
+        }
+        if let Ok(label) = std::str::from_utf8(&bytes[i..i + len]) {
+            domain.push_str(label);
+        }
+        i += len
+    }
+    domain
 }
