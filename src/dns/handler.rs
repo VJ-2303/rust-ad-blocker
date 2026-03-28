@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::{
     dns::{cache::Cache, upstream::UpstreamMultiplexer},
     error::{AppError, DnsError, Result},
@@ -42,23 +44,48 @@ pub async fn handle_query(
         Ok(bytes)
     } else {
         if let Some(cached_bytes) = cache.get(domain_bytes, &packet_bytes[0..2]).await {
+            metrics
+                .cache_hits
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             return Ok(cached_bytes);
         }
+        metrics
+            .cache_misses
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-        let upstream_response: Vec<u8> = multiplexer
+        let start_time = Instant::now();
+        let upstream_result = multiplexer
             .forward(packet_bytes.clone(), upstream_addr)
-            .await?;
-
-        let parsed = DnsPacket::parse(&upstream_response)?;
-
-        cache
-            .put(
-                domain_bytes.to_vec(),
-                upstream_response.clone(),
-                parsed.get_ttl(),
-            )
             .await;
+        let elapsed_ms = start_time.elapsed().as_millis() as u64;
 
-        Ok(upstream_response)
+        match upstream_result {
+            Ok(upstream_response) => {
+                metrics
+                    .upstream_latency_ms
+                    .fetch_add(elapsed_ms, std::sync::atomic::Ordering::Relaxed);
+                metrics
+                    .upstream_requests
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+                let parsed = DnsPacket::parse(&upstream_response)?;
+
+                cache
+                    .put(
+                        domain_bytes.to_vec(),
+                        upstream_response.clone(),
+                        parsed.get_ttl(),
+                    )
+                    .await;
+
+                Ok(upstream_response)
+            }
+            Err(e) => {
+                metrics
+                    .upstream_errors
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                Err(e)
+            }
+        }
     }
 }
