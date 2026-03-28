@@ -38,12 +38,12 @@ impl Cache {
         }
         None
     }
-    pub async fn put(&self, domain: Vec<u8>, response_bytes: Vec<u8>) {
+    pub async fn put(&self, domain: Vec<u8>, response_bytes: Vec<u8>, ttl: u32) {
         let mut store = self.store.write().await;
 
         let entry = CacheEntry {
             response_bytes,
-            expires_at: Instant::now() + Duration::from_secs(300),
+            expires_at: Instant::now() + Duration::from_secs(ttl as u64),
         };
         store.insert(domain, entry);
     }

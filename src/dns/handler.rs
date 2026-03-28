@@ -49,8 +49,14 @@ pub async fn handle_query(
 
         let upstream_response = upstream::forward(packet_bytes, upstream_addr).await?;
 
+        let parsed = DnsPacket::parse(&upstream_response)?;
+
         cache
-            .put(domain_bytes.to_vec(), upstream_response.clone())
+            .put(
+                domain_bytes.to_vec(),
+                upstream_response.clone(),
+                parsed.get_ttl(),
+            )
             .await;
 
         Ok(upstream_response)

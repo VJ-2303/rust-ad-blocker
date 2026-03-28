@@ -36,4 +36,12 @@ impl DnsPacket {
             .first()
             .map(|query| query.name().to_string())
     }
+    pub fn get_ttl(&self) -> u32 {
+        self.inner
+            .answers()
+            .iter()
+            .map(|record| record.ttl())
+            .min()
+            .unwrap_or(300)
+    }
 }
