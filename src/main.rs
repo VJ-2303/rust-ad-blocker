@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     };
 
     info!(
-        domain_count = state.blocklist.len().await,
+        domain_count = state.blocklist.len(),
         "Successfully loaded blocklist"
     );
 
@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
                 .await
                 {
                     success = true;
-                    task_blocklist.update_list(new_list).await;
+                    task_blocklist.update_list(new_list);
                     break;
                 }
                 warn!("Attempt {} failed, retrying in 10s...", attempt);
@@ -99,7 +99,7 @@ async fn main() -> Result<()> {
 
     tokio::spawn(async move {
         loop {
-            task_cache.clean_expired().await;
+            task_cache.clean_expired();
             tokio::time::sleep(Duration::from_secs(300)).await;
         }
     });

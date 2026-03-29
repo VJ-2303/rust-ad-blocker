@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     io::Error,
     sync::{
         Arc,
@@ -8,13 +7,13 @@ use std::{
 };
 
 use bytes::{Bytes, BytesMut};
-use std::sync::Mutex;
+use dashmap::DashMap;
 use tokio::{net::UdpSocket, sync::oneshot};
 use tracing::error;
 
 use crate::error::{AppError, Result};
 
-type PendingMap = Arc<Mutex<HashMap<u16, oneshot::Sender<BytesMut>>>>;
+type PendingMap = Arc<DashMap<u16, oneshot::Sender<BytesMut>>>;
 
 #[derive(Clone)]
 pub struct UpstreamMultiplexer {
@@ -25,7 +24,7 @@ pub struct UpstreamMultiplexer {
 
 impl UpstreamMultiplexer {
     pub fn new(socket: Arc<UdpSocket>) -> Self {
-        let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
+        let pending: PendingMap = Arc::new(DashMap::new());
         let next_id = Arc::new(AtomicU16::new(0));
 
         let multiplexer = Self {
@@ -44,9 +43,7 @@ impl UpstreamMultiplexer {
                         let response = buf.split_to(len);
                         let id = u16::from_be_bytes([response[0], response[1]]);
 
-                        let mut map = pending.lock().unwrap();
-
-                        if let Some(sender) = map.remove(&id) {
+                        if let Some((_, sender)) = pending.remove(&id) {
                             let _ = sender.send(response);
                         }
                     }
@@ -68,10 +65,7 @@ impl UpstreamMultiplexer {
 
         let (tx, rx) = oneshot::channel();
 
-        {
-            let mut map = self.pending.lock().unwrap();
-            map.insert(internal_id, tx);
-        }
+        self.pending.insert(internal_id, tx);
 
         self.socket.send_to(&query_bytes, upstream_addr).await?;
 
@@ -85,8 +79,7 @@ impl UpstreamMultiplexer {
             Ok(Err(_)) => Err(AppError::Dns(crate::error::DnsError::NoQueries)),
 
             Err(_) => {
-                let mut map = self.pending.lock().unwrap();
-                map.remove(&internal_id);
+                self.pending.remove(&internal_id);
 
                 Err(AppError::Io(Error::new(
                     std::io::ErrorKind::TimedOut,

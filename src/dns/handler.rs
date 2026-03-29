@@ -13,12 +13,12 @@ pub async fn handle_query(packet_bytes: BytesMut, state: &ServerState) -> Result
         .total_queries
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let mut i = 12;
-    while packet_bytes[i] != 0 {
+    while i < packet_bytes.len() && packet_bytes[i] != 0 {
         i += 1
     }
-    let domain_bytes = packet_bytes[12..=i].to_vec();
+    let domain_bytes = &packet_bytes[12..=i];
 
-    if state.blocklist.is_blocked(&domain_bytes).await {
+    if state.blocklist.is_blocked(domain_bytes) {
         state
             .metrics
             .blocked_queries
@@ -36,13 +36,15 @@ pub async fn handle_query(packet_bytes: BytesMut, state: &ServerState) -> Result
         let bytes = response.serialize()?;
         Ok(bytes::Bytes::from(bytes))
     } else {
-        if let Some(cached_bytes) = state.cache.get(&domain_bytes, &packet_bytes[0..2]).await {
+        if let Some(cached_bytes) = state.cache.get(domain_bytes, &packet_bytes[0..2]) {
             state
                 .metrics
                 .cache_hits
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             return Ok(bytes::Bytes::from(cached_bytes));
         }
+
+        let domain_owned = domain_bytes.to_vec();
         state
             .metrics
             .cache_misses
@@ -70,8 +72,7 @@ pub async fn handle_query(packet_bytes: BytesMut, state: &ServerState) -> Result
 
                 state
                     .cache
-                    .put(domain_bytes, upstream_response.to_vec(), parsed.get_ttl())
-                    .await;
+                    .put(domain_owned, upstream_response.to_vec(), parsed.get_ttl());
 
                 Ok(upstream_response)
             }

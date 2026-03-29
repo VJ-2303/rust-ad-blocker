@@ -20,7 +20,7 @@ pub struct StatusResponse {
 }
 
 pub async fn list_custom_domains(State(state): State<AppState>) -> Json<DomainListResponse> {
-    let mut domains = state.blocklist.get_custom_domains().await;
+    let mut domains = state.blocklist.get_custom_domains();
     domains.sort();
     Json(DomainListResponse { domains })
 }

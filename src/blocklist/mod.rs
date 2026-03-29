@@ -36,11 +36,11 @@ impl Blocklist {
             custom_path: path.to_string(),
         })
     }
-    pub async fn is_blocked(&self, domain_bytes: &[u8]) -> bool {
+    pub fn is_blocked(&self, domain_bytes: &[u8]) -> bool {
         self.all_domains.read().contains(domain_bytes)
     }
 
-    pub async fn get_custom_domains(&self) -> Vec<String> {
+    pub fn get_custom_domains(&self) -> Vec<String> {
         let guard = self.custom_domains.read();
         guard.iter().map(|bytes| decode_domain(bytes)).collect()
     }
@@ -65,10 +65,10 @@ impl Blocklist {
         Ok(())
     }
 
-    pub async fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.all_domains.read().len()
     }
-    pub async fn update_list(&self, remote: HashSet<Vec<u8>>) {
+    pub fn update_list(&self, remote: HashSet<Vec<u8>>) {
         let custom = self.custom_domains.read().clone();
         let mut all = remote;
         all.extend(custom);
