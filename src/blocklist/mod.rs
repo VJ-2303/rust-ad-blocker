@@ -73,9 +73,14 @@ impl Blocklist {
         self.all_domains.read().len()
     }
     pub fn update_list(&self, remote: AHashSet<Vec<u8>>) {
-        let custom = self.custom_domains.read().clone();
+        let custom_snapshot = {
+            let guard = self.custom_domains.read();
+            guard.clone()
+        };
+
         let mut all = remote;
-        all.extend(custom);
+        all.extend(custom_snapshot);
+
         *self.all_domains.write() = all;
     }
 }
