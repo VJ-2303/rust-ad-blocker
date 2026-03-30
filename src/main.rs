@@ -22,7 +22,10 @@ use crate::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = config::Config::load("config.toml")?;
+    let config_path = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "config.toml".to_string());
+    let config = config::Config::load(&config_path)?;
 
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::new(&config.log_level))
@@ -55,7 +58,7 @@ async fn main() -> Result<()> {
     info!(
         listen_addr = %config.listen_addr,
         upstream = %config.upstream_dns,
-        "Starting RustHoldatae DNS Server"
+        "Starting Adblocker DNS Server"
     );
 
     let task_state = state.clone();
@@ -100,13 +103,13 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         loop {
             task_cache.clean_expired();
-            tokio::time::sleep(Duration::from_secs(300)).await;
+            tokio::time::sleep(Duration::from_secs(60)).await;
         }
     });
 
-    tracing::info!("Starting Admin Web API on 0.0.0.0:8080");
+    tracing::info!(admin_addr = %config.admin_addr, "Starting Admin Web API");
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    let listener = tokio::net::TcpListener::bind(&config.admin_addr).await?;
 
     let app_state = AppState {
         metrics: state.metrics.clone(),

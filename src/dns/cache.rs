@@ -63,6 +63,7 @@ impl Cache {
             .iter()
             .filter(|(_, entry)| entry.expires_at <= now)
             .map(|(key, _)| key.clone())
+            .take(200)
             .collect();
 
         for key in expired_key {

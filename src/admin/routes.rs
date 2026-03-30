@@ -1,7 +1,7 @@
 use axum::{Json, Router, extract::State, routing::get};
 use serde::Serialize;
 
-use crate::admin::domains::{add_custom_domain, list_custom_domains};
+use crate::admin::domains::{add_custom_domain, list_custom_domains, remove_custom_domain};
 use crate::admin::state::AppState;
 
 #[derive(Serialize)]
@@ -88,7 +88,9 @@ pub fn app(state: AppState) -> Router {
         // FIX: Chained get and post on the same exact path
         .route(
             "/api/v1/domains/custom",
-            get(list_custom_domains).post(add_custom_domain),
+            get(list_custom_domains)
+                .post(add_custom_domain)
+                .delete(remove_custom_domain),
         )
         .with_state(state)
 }

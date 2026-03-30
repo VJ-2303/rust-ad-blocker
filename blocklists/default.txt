@@ -1,5 +1,4 @@
-# This is my awesome blocklist
-# Updated: 2026-03-20
-
-evil-ads.com
+# Custom blocked domains
+google.com
 trackers.net
+youtube.com

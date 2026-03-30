@@ -69,6 +69,44 @@ impl Blocklist {
         Ok(())
     }
 
+    pub async fn remove_custom_domain(&self, domain: &str) -> std::io::Result<bool> {
+        let domain = domain.trim().to_lowercase();
+        let encoded = encode_domain(&domain);
+
+        let was_removed = {
+            let mut custom_guard = self.custom_domains.write();
+            custom_guard.remove(&encoded)
+        };
+
+        if !was_removed {
+            return Ok(false);
+        }
+
+        {
+            let mut all_guard = self.all_domains.write();
+            all_guard.remove(&encoded);
+        }
+
+        self.persist_custom_domains().await?;
+        Ok(true)
+    }
+
+    async fn persist_custom_domains(&self) -> std::io::Result<()> {
+        let content = {
+            let guard = self.custom_domains.read();
+            let mut sorted: Vec<String> = guard.iter().map(|b| decode_domain(b)).collect();
+            sorted.sort();
+
+            let mut lines = String::from("# Custom blocked domains\n");
+            for domain in sorted {
+                lines.push_str(&domain);
+                lines.push('\n');
+            }
+            lines
+        };
+        tokio::fs::write(&self.custom_path, content).await
+    }
+
     pub fn len(&self) -> usize {
         self.all_domains.read().len()
     }

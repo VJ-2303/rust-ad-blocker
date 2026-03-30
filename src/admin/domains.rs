@@ -47,3 +47,30 @@ pub async fn add_custom_domain(
         }),
     }
 }
+
+pub async fn remove_custom_domain(
+    State(state): State<AppState>,
+    Json(payload): Json<AddDomainRequest>,
+) -> Json<StatusResponse> {
+    if payload.domain.is_empty() {
+        return Json(StatusResponse {
+            status: "error".to_string(),
+            message: "Domain cannot be empty".to_string(),
+        });
+    }
+
+    match state.blocklist.remove_custom_domain(&payload.domain).await {
+        Ok(true) => Json(StatusResponse {
+            status: "success".to_string(),
+            message: format!("Successfully unblocked {}", payload.domain),
+        }),
+        Ok(false) => Json(StatusResponse {
+            status: "not_found".to_string(),
+            message: format!("'{}' was not in the custom blocklist", payload.domain),
+        }),
+        Err(e) => Json(StatusResponse {
+            status: "error".to_string(),
+            message: format!("Failed to remove domain: {}", e),
+        }),
+    }
+}

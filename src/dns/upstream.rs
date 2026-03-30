@@ -76,7 +76,7 @@ impl UpstreamMultiplexer {
 
                 Ok(response.freeze())
             }
-            Ok(Err(_)) => Err(AppError::Dns(crate::error::DnsError::NoQueries)),
+            Ok(Err(_)) => Err(AppError::Dns(crate::error::DnsError::UpstreamChannelClosed)),
 
             Err(_) => {
                 self.pending.remove(&internal_id);

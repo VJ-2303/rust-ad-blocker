@@ -19,7 +19,6 @@ pub enum AppError {
     Network(#[from] reqwest::Error),
 }
 
-// 3. THE DEPARTMENT ERRORS
 #[derive(Error, Debug)]
 pub enum ConfigError {
     #[error("Failed to read config file: {0}")]
@@ -34,7 +33,6 @@ pub enum DnsError {
     #[error("Failed to parse DNS packet: {0}")]
     Parse(#[from] hickory_proto::error::ProtoError),
 
-    // Look! We replaced the "Stringly-Typed" error with a real, strongly-typed variant!
-    #[error("DNS packet contained no queries")]
-    NoQueries,
+    #[error("Upstream response channel closed unexpectedly")]
+    UpstreamChannelClosed,
 }

@@ -1,11 +1,14 @@
-use std::u8;
-
 use ahash::AHashSet;
 
 use crate::{blocklist::encode_domain, error::AppError};
 
 pub async fn fetch_remote_blocklist(url: &str) -> Result<AHashSet<Vec<u8>>, AppError> {
-    let text = reqwest::get(url).await?.text().await?;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .user_agent("AdBlocker/1.0")
+        .build()?;
+
+    let text = client.get(url).send().await?.text().await?;
 
     let mut blocklist: AHashSet<Vec<u8>> = AHashSet::new();
 
