@@ -24,7 +24,13 @@ pub async fn run(state: ServerState) -> Result<()> {
 
     loop {
         buf.reserve(4096);
-        let (len, addr) = state.socket.recv_buf_from(&mut buf).await.unwrap();
+        let (len, addr) = match state.socket.recv_buf_from(&mut buf).await {
+            Ok(result) => result,
+            Err(e) => {
+                error!(error = %e, "Socket receive error - skipping packet");
+                continue;
+            }
+        };
 
         let payload: BytesMut = buf.split_to(len);
 
