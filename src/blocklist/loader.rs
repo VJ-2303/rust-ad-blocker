@@ -1,11 +1,13 @@
-use std::{collections::HashSet, u8};
+use std::u8;
+
+use ahash::AHashSet;
 
 use crate::{blocklist::encode_domain, error::AppError};
 
-pub async fn fetch_remote_blocklist(url: &str) -> Result<HashSet<Vec<u8>>, AppError> {
+pub async fn fetch_remote_blocklist(url: &str) -> Result<AHashSet<Vec<u8>>, AppError> {
     let text = reqwest::get(url).await?.text().await?;
 
-    let mut blocklist: HashSet<Vec<u8>> = HashSet::new();
+    let mut blocklist: AHashSet<Vec<u8>> = AHashSet::new();
 
     for line in text.lines() {
         let line = line.trim();

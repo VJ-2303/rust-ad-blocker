@@ -1,16 +1,15 @@
+use ahash::AHashSet;
+use parking_lot::RwLock;
 use std::{
-    collections::HashSet,
     fs::File,
     io::{BufRead, BufReader},
 };
+use tokio::io::AsyncWriteExt;
 pub mod loader;
 
-use parking_lot::RwLock;
-use tokio::io::AsyncWriteExt;
-
 pub struct Blocklist {
-    pub all_domains: RwLock<HashSet<Vec<u8>>>,
-    pub custom_domains: RwLock<HashSet<Vec<u8>>>,
+    pub all_domains: RwLock<AHashSet<Vec<u8>>>,
+    pub custom_domains: RwLock<AHashSet<Vec<u8>>>,
     pub custom_path: String,
 }
 
@@ -19,7 +18,7 @@ impl Blocklist {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
 
-        let mut domains = HashSet::new();
+        let mut domains = AHashSet::new();
 
         for line in reader.lines() {
             let line = line?;
@@ -73,7 +72,7 @@ impl Blocklist {
     pub fn len(&self) -> usize {
         self.all_domains.read().len()
     }
-    pub fn update_list(&self, remote: HashSet<Vec<u8>>) {
+    pub fn update_list(&self, remote: AHashSet<Vec<u8>>) {
         let custom = self.custom_domains.read().clone();
         let mut all = remote;
         all.extend(custom);
