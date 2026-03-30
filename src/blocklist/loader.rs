@@ -20,7 +20,7 @@ pub async fn fetch_remote_blocklist(url: &str) -> Result<HashSet<Vec<u8>>, AppEr
             if domain == "localhost" || domain == "local" || domain == "broadcasthost" {
                 continue;
             }
-            blocklist.insert(encode_domain(domain));
+            blocklist.insert(encode_domain(&domain.to_lowercase()));
         }
     }
     Ok(blocklist)

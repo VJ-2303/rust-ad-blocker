@@ -28,11 +28,12 @@ impl Blocklist {
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
-            domains.insert(encode_domain(line));
+            domains.insert(encode_domain(&line.to_lowercase()));
         }
+        let initial_all = domains.clone();
         Ok(Self {
             custom_domains: RwLock::new(domains),
-            all_domains: RwLock::new(HashSet::new()),
+            all_domains: RwLock::new(initial_all),
             custom_path: path.to_string(),
         })
     }
@@ -50,10 +51,14 @@ impl Blocklist {
         let encoded = encode_domain(&domain);
 
         {
-            let mut guard = self.custom_domains.write();
-            if !guard.insert(encoded) {
+            let mut custom_guard = self.custom_domains.write();
+            if !custom_guard.insert(encoded.clone()) {
                 return Ok(());
             }
+        }
+        {
+            let mut all_guard = self.all_domains.write();
+            all_guard.insert(encoded);
         }
         let mut file = tokio::fs::OpenOptions::new()
             .create(true)

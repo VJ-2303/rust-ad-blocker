@@ -16,9 +16,15 @@ pub async fn handle_query(packet_bytes: BytesMut, state: &ServerState) -> Result
     while i < packet_bytes.len() && packet_bytes[i] != 0 {
         i += 1
     }
-    let domain_bytes = &packet_bytes[12..=i];
+    let mut domain_bytes = packet_bytes[12..=i].to_vec();
 
-    if state.blocklist.is_blocked(domain_bytes) {
+    for byte in domain_bytes.iter_mut() {
+        byte.make_ascii_lowercase();
+    }
+
+    let domain_bytes = domain_bytes;
+
+    if state.blocklist.is_blocked(&domain_bytes) {
         state
             .metrics
             .blocked_queries
@@ -36,7 +42,7 @@ pub async fn handle_query(packet_bytes: BytesMut, state: &ServerState) -> Result
         let bytes = response.serialize()?;
         Ok(bytes::Bytes::from(bytes))
     } else {
-        if let Some(cached_bytes) = state.cache.get(domain_bytes, &packet_bytes[0..2]) {
+        if let Some(cached_bytes) = state.cache.get(&domain_bytes, &packet_bytes[0..2]) {
             state
                 .metrics
                 .cache_hits
@@ -44,7 +50,7 @@ pub async fn handle_query(packet_bytes: BytesMut, state: &ServerState) -> Result
             return Ok(bytes::Bytes::from(cached_bytes));
         }
 
-        let domain_owned = domain_bytes.to_vec();
+        let domain_owned = domain_bytes;
         state
             .metrics
             .cache_misses
