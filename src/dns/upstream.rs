@@ -33,21 +33,23 @@ impl UpstreamMultiplexer {
             next_id,
         };
 
-        let mut buf = BytesMut::with_capacity(65536);
-
         tokio::spawn(async move {
+            let mut buf = vec![0u8; 4096];
+
             loop {
-                buf.reserve(4096);
-                match socket.recv_buf_from(&mut buf).await {
+                match socket.recv_from(&mut buf).await {
                     Ok((len, _addr)) => {
-                        let response = buf.split_to(len);
-                        let id = u16::from_be_bytes([response[0], response[1]]);
+                        if len < 12 {
+                            continue;
+                        }
+                        let id = u16::from_be_bytes([buf[0], buf[1]]);
 
                         if let Some((_, sender)) = pending.remove(&id) {
+                            let response = BytesMut::from(&buf[..len]);
                             let _ = sender.send(response);
                         }
                     }
-                    Err(e) => error!("Mainlman error receiving from upstream: {}", e),
+                    Err(e) => error!("error receiving from upstream: {}", e),
                 }
             }
         });
@@ -63,29 +65,39 @@ impl UpstreamMultiplexer {
         query_bytes[0] = id_bytes[0];
         query_bytes[1] = id_bytes[1];
 
-        let (tx, rx) = oneshot::channel();
-
+        let (tx, mut rx) = oneshot::channel();
         self.pending.insert(internal_id, tx);
 
-        self.socket.send_to(&query_bytes, upstream_addr).await?;
+        let max_attempts = 2;
+        let timeout_per_attempt = std::time::Duration::from_secs(3);
 
-        match tokio::time::timeout(std::time::Duration::from_secs(4), rx).await {
-            Ok(Ok(mut response)) => {
-                response[0] = original_id_0;
-                response[1] = original_id_1;
-
-                Ok(response.freeze())
-            }
-            Ok(Err(_)) => Err(AppError::Dns(crate::error::DnsError::UpstreamChannelClosed)),
-
-            Err(_) => {
+        for attempt in 0..max_attempts {
+            if let Err(e) = self.socket.send_to(&query_bytes, upstream_addr).await {
                 self.pending.remove(&internal_id);
+                return Err(AppError::Io(e));
+            }
 
-                Err(AppError::Io(Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "Upstream DNS timeout",
-                )))
+            match tokio::time::timeout(timeout_per_attempt, &mut rx).await {
+                Ok(Ok(mut response)) => {
+                    response[0] = original_id_0;
+                    response[1] = original_id_1;
+                    return Ok(response.freeze());
+                }
+                Ok(Err(_)) => {
+                    self.pending.remove(&internal_id);
+                    return Err(AppError::Dns(crate::error::DnsError::UpstreamChannelClosed));
+                }
+                Err(_) => {
+                    if attempt < max_attempts - 1 {
+                        continue;
+                    }
+                }
             }
         }
+        self.pending.remove(&internal_id);
+        Err(AppError::Io(Error::new(
+            std::io::ErrorKind::TimedOut,
+            "Upstream DNS timeout",
+        )))
     }
 }

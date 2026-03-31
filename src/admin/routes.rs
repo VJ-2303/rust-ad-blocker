@@ -1,8 +1,17 @@
-use axum::{Json, Router, extract::State, routing::get};
+use axum::{
+    Json, Router,
+    extract::{Path, State},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
+    response::{Html, IntoResponse, Response},
+    routing::get,
+};
+use include_dir::{Dir, include_dir};
 use serde::Serialize;
 
 use crate::admin::domains::{add_custom_domain, list_custom_domains, remove_custom_domain};
 use crate::admin::state::AppState;
+
+static ADMIN_ASSETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/static/admin");
 
 #[derive(Serialize)]
 pub struct StatsResponse {
@@ -21,7 +30,42 @@ async fn health_check() -> &'static str {
     "Admin API is running!"
 }
 
-// FIX: Updated to extract AppState instead of Arc<Metrics>
+async fn admin_index() -> impl IntoResponse {
+    if let Some(file) = ADMIN_ASSETS.get_file("index.html") {
+        let html = String::from_utf8_lossy(file.contents()).to_string();
+        return Html(html).into_response();
+    }
+
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Embedded index.html not found",
+    )
+        .into_response()
+}
+
+async fn admin_asset(Path(path): Path<String>) -> Response {
+    let clean_path = path.trim_start_matches('/');
+
+    let requested = if clean_path.is_empty() {
+        "index.html"
+    } else {
+        clean_path
+    };
+
+    if let Some(file) = ADMIN_ASSETS.get_file(requested) {
+        let mime = mime_guess::from_path(requested).first_or_octet_stream();
+
+        let mut headers = HeaderMap::new();
+        if let Ok(value) = HeaderValue::from_str(mime.as_ref()) {
+            headers.insert(header::CONTENT_TYPE, value);
+        }
+
+        return (StatusCode::OK, headers, file.contents().to_vec()).into_response();
+    }
+
+    (StatusCode::NOT_FOUND, "Asset not found").into_response()
+}
+
 async fn stats(State(state): State<AppState>) -> Json<StatsResponse> {
     let metrics = &state.metrics;
 
@@ -84,8 +128,10 @@ async fn stats(State(state): State<AppState>) -> Json<StatsResponse> {
 pub fn app(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health_check))
+        .route("/admin", get(admin_index))
+        .route("/admin/", get(admin_index))
+        .route("/admin/*path", get(admin_asset))
         .route("/api/v1/stats", get(stats))
-        // FIX: Chained get and post on the same exact path
         .route(
             "/api/v1/domains/custom",
             get(list_custom_domains)

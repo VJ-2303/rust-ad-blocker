@@ -1,4 +1,1 @@
 # Custom blocked domains
-google.com
-trackers.net
-youtube.com

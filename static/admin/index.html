@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AdBloacker Admin</title>
+    <link rel="stylesheet" href="/admin/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <p class="brand-kicker">Operations Console</p>
+          <h1>AdBloacker Admin</h1>
+        </div>
+        <div class="topbar-actions">
+          <button id="refresh-all" class="btn btn-secondary" type="button">Refresh</button>
+          <span id="api-health" class="health-pill health-pill-unknown">Checking API...</span>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel metrics-panel">
+          <div class="panel-head">
+            <h2>Traffic Metrics</h2>
+            <p>Realtime visibility into DNS behavior and upstream performance.</p>
+          </div>
+
+          <div class="metrics-grid">
+            <article class="metric-card">
+              <p class="metric-label">Total Queries</p>
+              <p id="metric-total-queries" class="metric-value">-</p>
+            </article>
+
+            <article class="metric-card">
+              <p class="metric-label">Blocked Queries</p>
+              <p id="metric-blocked-queries" class="metric-value">-</p>
+            </article>
+
+            <article class="metric-card">
+              <p class="metric-label">Block Rate</p>
+              <p id="metric-block-rate" class="metric-value">-</p>
+            </article>
+
+            <article class="metric-card">
+              <p class="metric-label">Cache Hits</p>
+              <p id="metric-cache-hits" class="metric-value">-</p>
+            </article>
+
+            <article class="metric-card">
+              <p class="metric-label">Cache Misses</p>
+              <p id="metric-cache-misses" class="metric-value">-</p>
+            </article>
+
+            <article class="metric-card">
+              <p class="metric-label">Cache Hit Rate</p>
+              <p id="metric-cache-hit-rate" class="metric-value">-</p>
+            </article>
+
+            <article class="metric-card">
+              <p class="metric-label">Avg Upstream Latency</p>
+              <p id="metric-latency" class="metric-value">-</p>
+            </article>
+
+            <article class="metric-card">
+              <p class="metric-label">Uptime</p>
+              <p id="metric-uptime" class="metric-value">-</p>
+            </article>
+
+            <article class="metric-card metric-card-alert">
+              <p class="metric-label">Upstream Errors</p>
+              <p id="metric-errors" class="metric-value">-</p>
+            </article>
+          </div>
+          <p id="stats-updated-at" class="meta-note">Last updated: never</p>
+        </section>
+
+        <section class="panel domains-panel">
+          <div class="panel-head">
+            <h2>Custom Blocked Domains</h2>
+            <p>Add or remove domains from your local custom blocklist.</p>
+          </div>
+
+          <form id="add-domain-form" class="domain-form" novalidate>
+            <label for="domain-input" class="sr-only">Domain to block</label>
+            <input
+              id="domain-input"
+              name="domain"
+              type="text"
+              autocomplete="off"
+              inputmode="url"
+              placeholder="example.com"
+              required
+            />
+            <button class="btn btn-primary" type="submit">Block Domain</button>
+          </form>
+
+          <div class="toolbar">
+            <label class="search-wrap" for="domain-search">
+              <span>Search</span>
+              <input id="domain-search" type="search" placeholder="Filter domain list" />
+            </label>
+            <p id="domain-count" class="meta-note">0 domains</p>
+          </div>
+
+          <div class="table-wrap">
+            <table aria-label="Blocked domains table">
+              <thead>
+                <tr>
+                  <th scope="col">Domain</th>
+                  <th scope="col" class="actions-col">Action</th>
+                </tr>
+              </thead>
+              <tbody id="domain-table-body">
+                <tr>
+                  <td colspan="2" class="placeholder">Loading domains...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <section id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="true"></section>
+    <script src="/admin/app.js" defer></script>
+  </body>
+</html>
