@@ -38,7 +38,11 @@ async fn main() -> Result<()> {
     let cache = Cache::new();
     let metrics = Arc::new(Metrics::default());
     let socket = Arc::new(UdpSocket::bind(&config.listen_addr).await?);
-    let multiplexer = UpstreamMultiplexer::new(Arc::new(UdpSocket::bind("0.0.0.0:0").await?));
+
+    let upstream_a = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+    let upstream_b = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+
+    let multiplexer = UpstreamMultiplexer::new(upstream_a, upstream_b);
     let upstream_addr = Arc::new(config.upstream_dns.clone());
 
     let state: ServerState = ServerState {
