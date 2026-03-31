@@ -4,10 +4,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+use bytes::Bytes;
 use lru::LruCache;
 use parking_lot::Mutex;
 
-const MAX_CACHE_ENTRIES: usize = 10_000;
+const MAX_CACHE_ENTRIES: usize = 5000;
 
 #[derive(Debug, Clone)]
 pub struct Cache {
@@ -16,7 +17,7 @@ pub struct Cache {
 
 #[derive(Debug, Clone)]
 pub struct CacheEntry {
-    pub response_bytes: Vec<u8>,
+    pub response_bytes: Bytes,
     pub expires_at: Instant,
 }
 
@@ -28,22 +29,23 @@ impl Cache {
             ))),
         }
     }
-    pub fn get(&self, domain: &[u8], original_id: &[u8]) -> Option<Vec<u8>> {
+    pub fn get(&self, domain: &[u8], original_id: &[u8]) -> Option<Bytes> {
         let mut cache = self.store.lock();
         if let Some(entry) = cache.get(domain) {
             if Instant::now() > entry.expires_at {
                 cache.pop(domain);
                 return None;
             }
-            let mut response = entry.response_bytes.clone();
-            response[0] = original_id[0];
-            response[1] = original_id[1];
+            let cached = entry.response_bytes.clone();
 
-            return Some(response);
+            let mut buf = bytes::BytesMut::with_capacity(cached.len());
+            buf.extend_from_slice(&[original_id[0], original_id[1]]);
+            buf.extend_from_slice(&cached[2..]);
+            return Some(buf.freeze());
         }
         None
     }
-    pub fn put(&self, domain: Vec<u8>, response_bytes: Vec<u8>, ttl: u32) {
+    pub fn put(&self, domain: Vec<u8>, response_bytes: Bytes, ttl: u32) {
         let mut cache = self.store.lock();
 
         cache.put(

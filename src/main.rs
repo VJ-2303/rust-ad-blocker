@@ -6,7 +6,7 @@ mod error;
 mod metrics;
 mod server;
 
-use std::{sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::net::UdpSocket;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -43,7 +43,10 @@ async fn main() -> Result<()> {
     let upstream_b = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
     let multiplexer = UpstreamMultiplexer::new(upstream_a, upstream_b);
-    let upstream_addr = Arc::new(config.upstream_dns.clone());
+    let upstream_addr: SocketAddr = config
+        .upstream_dns
+        .parse()
+        .expect("Invalid upstream_dns address in config file");
 
     let state: ServerState = ServerState {
         socket,

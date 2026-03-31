@@ -1,5 +1,6 @@
 use std::{
     io::Error,
+    net::SocketAddr,
     sync::{
         Arc,
         atomic::{AtomicU16, Ordering},
@@ -58,7 +59,11 @@ impl UpstreamMultiplexer {
 
         multiplexer
     }
-    pub async fn forward(&self, mut query_bytes: BytesMut, upstream_addr: &str) -> Result<Bytes> {
+    pub async fn forward(
+        &self,
+        mut query_bytes: BytesMut,
+        upstream_addr: SocketAddr,
+    ) -> Result<Bytes> {
         let original_id_0 = query_bytes[0];
         let original_id_1 = query_bytes[1];
 

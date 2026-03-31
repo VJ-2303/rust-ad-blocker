@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::blocklist::Blocklist;
@@ -16,7 +17,7 @@ pub struct ServerState {
     pub cache: Cache,
     pub metrics: Arc<Metrics>,
     pub multiplexer: UpstreamMultiplexer,
-    pub upstream_addr: Arc<String>,
+    pub upstream_addr: SocketAddr,
 }
 
 pub async fn run(state: ServerState) -> Result<()> {
