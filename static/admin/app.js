@@ -6,355 +6,305 @@ const API = {
 
 const state = {
   domains: [],
-  domainFilter: "",
+  filter: "",
   pollerId: null,
 };
 
-const refs = {
-  refreshButton: document.getElementById("refresh-all"),
-  healthBadge: document.getElementById("api-health"),
-  statsUpdatedAt: document.getElementById("stats-updated-at"),
-  addDomainForm: document.getElementById("add-domain-form"),
-  domainInput: document.getElementById("domain-input"),
-  domainSearch: document.getElementById("domain-search"),
-  domainCount: document.getElementById("domain-count"),
-  domainTableBody: document.getElementById("domain-table-body"),
-  toastStack: document.getElementById("toast-stack"),
-  metrics: {
-    totalQueries: document.getElementById("metric-total-queries"),
-    blockedQueries: document.getElementById("metric-blocked-queries"),
-    blockRate: document.getElementById("metric-block-rate"),
-    cacheHits: document.getElementById("metric-cache-hits"),
-    cacheMisses: document.getElementById("metric-cache-misses"),
-    cacheHitRate: document.getElementById("metric-cache-hit-rate"),
-    latency: document.getElementById("metric-latency"),
-    uptime: document.getElementById("metric-uptime"),
-    errors: document.getElementById("metric-errors"),
-  },
+const $ = (id) => document.getElementById(id);
+
+const el = {
+  health: $("api-health"),
+  refreshBtn: $("refresh-btn"),
+  addForm: $("add-domain-form"),
+  domainInput: $("domain-input"),
+  domainSearch: $("domain-search"),
+  domainCount: $("domain-count"),
+  domainList: $("domain-list"),
+  toastStack: $("toast-stack"),
+  lastUpdated: $("last-updated"),
+
+  // summary bar
+  statQueries: $("stat-queries"),
+  statBlocked: $("stat-blocked"),
+  statBlockPct: $("stat-block-pct"),
+  statCacheRate: $("stat-cache-rate"),
+  statDomainsCount: $("stat-domains-count"),
+
+  // metrics detail
+  mTotal: $("m-total"),
+  mBlocked: $("m-blocked"),
+  mCacheHits: $("m-cache-hits"),
+  mCacheMisses: $("m-cache-misses"),
+  mLatency: $("m-latency"),
+  mErrors: $("m-errors"),
+  mUptime: $("m-uptime"),
 };
 
-function formatInt(value) {
-  const parsed = Number(value) || 0;
-  return new Intl.NumberFormat().format(parsed);
+// ── Formatters ──
+
+function fmtInt(n) {
+  return new Intl.NumberFormat().format(Number(n) || 0);
 }
 
-function formatPercentage(value) {
-  const parsed = Number(value) || 0;
-  return `${parsed.toFixed(2)}%`;
+function fmtPct(n) {
+  return (Number(n) || 0).toFixed(1) + "%";
 }
 
-function formatLatency(value) {
-  const parsed = Number(value) || 0;
-  return `${parsed.toFixed(2)} ms`;
+function fmtMs(n) {
+  const v = Number(n) || 0;
+  return v < 1 ? "<1 ms" : v.toFixed(1) + " ms";
 }
 
-function formatUptime(totalSeconds) {
-  const sec = Math.max(0, Number(totalSeconds) || 0);
-  const days = Math.floor(sec / 86400);
-  const hours = Math.floor((sec % 86400) / 3600);
-  const minutes = Math.floor((sec % 3600) / 60);
-  const seconds = sec % 60;
-
-  if (days > 0) {
-    return `${days}d ${hours}h ${minutes}m`;
-  }
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m ${seconds}s`;
-  }
-
-  return `${minutes}m ${seconds}s`;
+function fmtUptime(sec) {
+  sec = Math.max(0, Number(sec) || 0);
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (d > 0) return d + "d " + h + "h " + m + "m";
+  if (h > 0) return h + "h " + m + "m " + s + "s";
+  return m + "m " + s + "s";
 }
 
-function normalizeDomain(value) {
-  return value.trim().toLowerCase().replace(/^\.+|\.+$/g, "");
+function fmtAgo(date) {
+  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diff < 5) return "just now";
+  if (diff < 60) return diff + "s ago";
+  return Math.floor(diff / 60) + "m ago";
 }
 
-function isLikelyDomain(value) {
-  if (!value || value.length > 253 || value.includes(" ")) {
-    return false;
-  }
-
-  const labels = value.split(".");
-  if (labels.length < 2) {
-    return false;
-  }
-
-  return labels.every((label) => /^[a-z0-9-]{1,63}$/.test(label) && !label.startsWith("-") && !label.endsWith("-"));
+function normalizeDomain(v) {
+  return v
+    .trim()
+    .toLowerCase()
+    .replace(/^\.+|\.+$/g, "");
 }
 
-async function readResponseJson(response) {
-  const text = await response.text();
-
-  if (!text) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    throw new Error("Server returned invalid JSON.");
-  }
+function isValidDomain(v) {
+  if (!v || v.length > 253 || v.includes(" ")) return false;
+  const labels = v.split(".");
+  if (labels.length < 2) return false;
+  return labels.every((l) => /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(l));
 }
 
-async function apiRequest(url, options = {}) {
-  const response = await fetch(url, {
+// ── API ──
+
+async function api(url, opts = {}) {
+  const res = await fetch(url, {
     headers: {
       Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers || {}),
+      ...(opts.body ? { "Content-Type": "application/json" } : {}),
     },
-    ...options,
+    ...opts,
   });
-
-  const payload = await readResponseJson(response).catch(() => ({}));
-
-  if (!response.ok) {
-    const message = payload.message || `Request failed (${response.status}).`;
-    throw new Error(message);
-  }
-
-  return payload;
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!res.ok)
+    throw new Error(data.message || "Request failed (" + res.status + ")");
+  return data;
 }
 
-function setHealthStatus(kind, text) {
-  refs.healthBadge.textContent = text;
-  refs.healthBadge.className = `health-pill health-pill-${kind}`;
-}
+// ── Toast ──
 
-function showToast(message, type = "success") {
+function toast(msg, type) {
   const node = document.createElement("div");
-  node.className = `toast ${type}`;
-  node.textContent = message;
-  refs.toastStack.appendChild(node);
-
-  window.setTimeout(() => {
-    node.remove();
-  }, 3400);
+  node.className = "toast toast-" + type;
+  node.textContent = msg;
+  el.toastStack.appendChild(node);
+  setTimeout(() => node.remove(), 3200);
 }
 
-function setLoadingDomains(message = "Loading domains...") {
-  refs.domainTableBody.innerHTML = `<tr><td colspan="2" class="placeholder">${message}</td></tr>`;
-}
+// ── Health ──
 
-function updateDomainCountLabel(count, filteredCount) {
-  if (count === filteredCount) {
-    refs.domainCount.textContent = `${count} domain${count === 1 ? "" : "s"}`;
-    return;
-  }
-
-  refs.domainCount.textContent = `${filteredCount} of ${count} domains`;
-}
-
-function renderDomains() {
-  const query = state.domainFilter.trim().toLowerCase();
-  const filtered = state.domains.filter((domain) => domain.toLowerCase().includes(query));
-
-  updateDomainCountLabel(state.domains.length, filtered.length);
-
-  if (filtered.length === 0) {
-    const message = query ? "No matching domains found." : "No custom blocked domains yet.";
-    refs.domainTableBody.innerHTML = `<tr><td colspan="2" class="placeholder">${message}</td></tr>`;
-    return;
-  }
-
-  refs.domainTableBody.replaceChildren();
-
-  for (const domain of filtered) {
-    const row = document.createElement("tr");
-
-    const domainCell = document.createElement("td");
-    domainCell.textContent = domain;
-
-    const actionCell = document.createElement("td");
-    const removeButton = document.createElement("button");
-    removeButton.className = "btn btn-danger";
-    removeButton.type = "button";
-    removeButton.dataset.removeDomain = domain;
-    removeButton.textContent = "Unblock";
-    actionCell.appendChild(removeButton);
-
-    row.appendChild(domainCell);
-    row.appendChild(actionCell);
-    refs.domainTableBody.appendChild(row);
-  }
-}
-
-function renderStats(stats) {
-  refs.metrics.totalQueries.textContent = formatInt(stats.total_queries);
-  refs.metrics.blockedQueries.textContent = formatInt(stats.blocked_queries);
-  refs.metrics.blockRate.textContent = formatPercentage(stats.block_percentage);
-  refs.metrics.cacheHits.textContent = formatInt(stats.cache_hits);
-  refs.metrics.cacheMisses.textContent = formatInt(stats.cache_misses);
-  refs.metrics.cacheHitRate.textContent = formatPercentage(stats.cache_hit_percentage);
-  refs.metrics.latency.textContent = formatLatency(stats.average_upstream_latency_ms);
-  refs.metrics.uptime.textContent = formatUptime(stats.uptime_seconds);
-  refs.metrics.errors.textContent = formatInt(stats.upstream_errors);
-
-  const now = new Date();
-  refs.statsUpdatedAt.textContent = `Last updated: ${now.toLocaleString()}`;
+function setHealth(kind, text) {
+  el.health.className = "status status-" + kind;
+  el.health.querySelector(".status-dot");
+  el.health.lastChild.textContent = text;
 }
 
 async function loadHealth() {
   try {
-    const response = await fetch(API.health, { method: "GET" });
-    const text = (await response.text()).trim();
-
-    if (response.ok) {
-      setHealthStatus("ok", "API Healthy");
-    } else {
-      setHealthStatus("warning", `API ${response.status}`);
-    }
-
-    if (text && text !== "Admin API is running!") {
-      showToast(text, "success");
-    }
-  } catch (error) {
-    setHealthStatus("error", "API Unreachable");
+    const res = await fetch(API.health);
+    setHealth(res.ok ? "ok" : "warning", res.ok ? "Healthy" : "Degraded");
+  } catch {
+    setHealth("error", "Unreachable");
   }
+}
+
+// ── Stats ──
+
+let lastStatsTime = null;
+
+function renderStats(s) {
+  // Summary bar
+  el.statQueries.textContent = fmtInt(s.total_queries);
+  el.statBlocked.textContent = fmtInt(s.blocked_queries);
+  el.statBlockPct.textContent =
+    s.total_queries > 0 ? fmtPct(s.block_percentage) : "";
+  el.statCacheRate.textContent = fmtPct(s.cache_hit_percentage);
+  el.statDomainsCount.textContent = fmtInt(s.blocked_domains_count);
+
+  // Detail table
+  el.mTotal.textContent = fmtInt(s.total_queries);
+  el.mBlocked.textContent = fmtInt(s.blocked_queries);
+  el.mCacheHits.textContent = fmtInt(s.cache_hits);
+  el.mCacheMisses.textContent = fmtInt(s.cache_misses);
+  el.mLatency.textContent = fmtMs(s.average_upstream_latency_ms);
+  el.mErrors.textContent = fmtInt(s.upstream_errors);
+  el.mUptime.textContent = fmtUptime(s.uptime_seconds);
+
+  // Highlight errors only if non-zero
+  el.mErrors.classList.toggle("val-error", s.upstream_errors > 0);
+
+  lastStatsTime = new Date();
+  el.lastUpdated.textContent = "Last updated: just now";
 }
 
 async function loadStats() {
-  const stats = await apiRequest(API.stats);
-  renderStats(stats);
+  const s = await api(API.stats);
+  renderStats(s);
+}
+
+// ── Domains ──
+
+function renderDomains() {
+  const q = state.filter.toLowerCase();
+  const filtered = state.domains.filter((d) => d.includes(q));
+
+  el.domainCount.textContent =
+    filtered.length === state.domains.length
+      ? state.domains.length
+      : filtered.length + " / " + state.domains.length;
+
+  el.domainList.replaceChildren();
+
+  if (filtered.length === 0) {
+    const li = document.createElement("li");
+    li.className = "empty-msg";
+    li.textContent = q ? "No matches." : "No custom domains yet.";
+    el.domainList.appendChild(li);
+    return;
+  }
+
+  for (const domain of filtered) {
+    const li = document.createElement("li");
+
+    const name = document.createElement("span");
+    name.className = "domain-name";
+    name.textContent = domain;
+
+    const btn = document.createElement("button");
+    btn.className = "btn-remove";
+    btn.type = "button";
+    btn.textContent = "×";
+    btn.dataset.domain = domain;
+    btn.title = "Unblock " + domain;
+
+    li.appendChild(name);
+    li.appendChild(btn);
+    el.domainList.appendChild(li);
+  }
 }
 
 async function loadDomains() {
-  setLoadingDomains();
-  const payload = await apiRequest(API.domains);
-  state.domains = Array.isArray(payload.domains) ? payload.domains.slice().sort() : [];
+  const data = await api(API.domains);
+  state.domains = Array.isArray(data.domains)
+    ? data.domains.slice().sort()
+    : [];
   renderDomains();
 }
 
-async function addDomain(rawDomain) {
-  const domain = normalizeDomain(rawDomain);
-
-  if (!isLikelyDomain(domain)) {
-    throw new Error("Enter a valid domain, such as example.com.");
-  }
-
-  const result = await apiRequest(API.domains, {
+async function addDomain(raw) {
+  const d = normalizeDomain(raw);
+  if (!isValidDomain(d))
+    throw new Error("Invalid domain. Use format: example.com");
+  return api(API.domains, {
     method: "POST",
-    body: JSON.stringify({ domain }),
+    body: JSON.stringify({ domain: d }),
   });
-
-  return result;
 }
 
-async function removeDomain(domain) {
-  const normalized = normalizeDomain(domain);
-
-  const result = await apiRequest(API.domains, {
+async function removeDomain(d) {
+  return api(API.domains, {
     method: "DELETE",
-    body: JSON.stringify({ domain: normalized }),
+    body: JSON.stringify({ domain: normalizeDomain(d) }),
   });
-
-  return result;
 }
+
+// ── Handlers ──
 
 async function refreshAll() {
-  refs.refreshButton.disabled = true;
-
+  el.refreshBtn.disabled = true;
   try {
     await Promise.all([loadHealth(), loadStats(), loadDomains()]);
   } finally {
-    refs.refreshButton.disabled = false;
+    el.refreshBtn.disabled = false;
   }
 }
 
-async function handleAddDomainSubmit(event) {
-  event.preventDefault();
-
-  const formData = new FormData(refs.addDomainForm);
-  const domainInput = (formData.get("domain") || "").toString();
-
+async function onAddSubmit(e) {
+  e.preventDefault();
+  const val = el.domainInput.value;
   try {
-    const response = await addDomain(domainInput);
-    showToast(response.message || "Domain added.", response.status === "success" ? "success" : "error");
-    refs.domainInput.value = "";
+    const res = await addDomain(val);
+    toast(res.message || "Blocked.", "success");
+    el.domainInput.value = "";
     await loadDomains();
-  } catch (error) {
-    showToast(error.message, "error");
+  } catch (err) {
+    toast(err.message, "error");
   }
 }
 
-async function handleDomainActionClick(event) {
-  const removeButton = event.target.closest("[data-remove-domain]");
-  if (!removeButton) {
-    return;
-  }
-
-  const domain = removeButton.getAttribute("data-remove-domain");
-  if (!domain) {
-    return;
-  }
-
-  const approved = window.confirm(`Unblock ${domain}?`);
-  if (!approved) {
-    return;
-  }
-
-  removeButton.disabled = true;
-
+async function onListClick(e) {
+  const btn = e.target.closest("[data-domain]");
+  if (!btn) return;
+  const domain = btn.dataset.domain;
+  if (!confirm("Unblock " + domain + "?")) return;
+  btn.disabled = true;
   try {
-    const response = await removeDomain(domain);
-    const kind = response.status === "success" ? "success" : "error";
-    showToast(response.message || "Domain removed.", kind);
+    const res = await removeDomain(domain);
+    toast(
+      res.message || "Unblocked.",
+      res.status === "success" ? "success" : "error",
+    );
     await loadDomains();
-  } catch (error) {
-    showToast(error.message, "error");
-  } finally {
-    removeButton.disabled = false;
+  } catch (err) {
+    toast(err.message, "error");
   }
 }
 
-function registerEvents() {
-  refs.refreshButton.addEventListener("click", () => {
-    refreshAll().catch((error) => {
-      showToast(error.message, "error");
-    });
-  });
+// ── Update "last updated" label ──
 
-  refs.addDomainForm.addEventListener("submit", (event) => {
-    handleAddDomainSubmit(event).catch((error) => {
-      showToast(error.message, "error");
-    });
-  });
+function tickLastUpdated() {
+  if (!lastStatsTime) return;
+  el.lastUpdated.textContent = "Last updated: " + fmtAgo(lastStatsTime);
+}
 
-  refs.domainSearch.addEventListener("input", (event) => {
-    state.domainFilter = String(event.target.value || "");
+// ── Boot ──
+
+function init() {
+  el.refreshBtn.addEventListener("click", () =>
+    refreshAll().catch((e) => toast(e.message, "error")),
+  );
+  el.addForm.addEventListener("submit", onAddSubmit);
+  el.domainSearch.addEventListener("input", (e) => {
+    state.filter = e.target.value || "";
     renderDomains();
   });
-
-  refs.domainTableBody.addEventListener("click", (event) => {
-    handleDomainActionClick(event).catch((error) => {
-      showToast(error.message, "error");
-    });
-  });
+  el.domainList.addEventListener("click", onListClick);
 
   window.addEventListener("visibilitychange", () => {
-    if (document.hidden) {
-      return;
-    }
-
-    loadStats().catch(() => {});
+    if (!document.hidden) loadStats().catch(() => {});
   });
-}
 
-async function boot() {
-  registerEvents();
+  refreshAll().catch((e) => toast(e.message, "error"));
 
-  try {
-    await refreshAll();
-  } catch (error) {
-    showToast(error.message, "error");
-  }
-
-  state.pollerId = window.setInterval(() => {
-    loadStats().catch(() => {
-      setHealthStatus("warning", "Stats Delayed");
-    });
+  // Poll stats every 5 seconds
+  state.pollerId = setInterval(() => {
+    loadStats().catch(() => setHealth("warning", "Delayed"));
   }, 5000);
-}
 
-boot();
+  // Update relative timestamp every 5 seconds
+  setInterval(tickLastUpdated, 5000);
+}
+init();

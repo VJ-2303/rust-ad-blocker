@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{Html, IntoResponse, Response},
-    routing::get,
+    routing::{delete, get},
 };
 use include_dir::{Dir, include_dir};
 use serde::Serialize;
@@ -24,6 +24,7 @@ pub struct StatsResponse {
     pub cache_hit_percentage: f64,
     pub average_upstream_latency_ms: f64,
     pub uptime_seconds: u64,
+    pub blocked_domains_count: u64,
 }
 
 async fn health_check() -> &'static str {
@@ -112,6 +113,8 @@ async fn stats(State(state): State<AppState>) -> Json<StatsResponse> {
 
     let uptime = metrics.start_time.elapsed().as_secs();
 
+    let blocked_domains_count = state.blocklist.len() as u64;
+
     Json(StatsResponse {
         total_queries: total,
         blocked_queries: blocked,
@@ -122,6 +125,7 @@ async fn stats(State(state): State<AppState>) -> Json<StatsResponse> {
         cache_hit_percentage: (cache_hit_percentage * 100.0).round() / 100.0,
         average_upstream_latency_ms: (avg_latency * 100.0).round() / 100.0,
         uptime_seconds: uptime,
+        blocked_domains_count,
     })
 }
 
@@ -134,9 +138,11 @@ pub fn app(state: AppState) -> Router {
         .route("/api/v1/stats", get(stats))
         .route(
             "/api/v1/domains/custom",
-            get(list_custom_domains)
-                .post(add_custom_domain)
-                .delete(remove_custom_domain),
+            get(list_custom_domains).post(add_custom_domain),
+        )
+        .route(
+            "/api/v1/domains/custom/:domain",
+            delete(remove_custom_domain),
         )
         .with_state(state)
 }

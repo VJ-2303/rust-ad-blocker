@@ -30,8 +30,8 @@ pub enum ConfigError {
 
 #[derive(Debug, Error)]
 pub enum DnsError {
-    #[error("Failed to parse DNS packet: {0}")]
-    Parse(#[from] hickory_proto::error::ProtoError),
+    #[error("Malformed DNS packet: {0}")]
+    MalformedPacket(String),
 
     #[error("Upstream response channel closed unexpectedly")]
     UpstreamChannelClosed,

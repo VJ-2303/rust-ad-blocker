@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────
+# AdBloacker Configuration Example File
+# ─────────────────────────────────────────────
+# The address and port the DNS server listens on.
+#   - "127.0.0.1:53"   → only accept local queries
+#   - "0.0.0.0:53"     → accept from entire network (typical for a home server)
+#   - "0.0.0.0:8053"   → non-privileged port (no sudo needed, for testing)
+listen_addr = "0.0.0.0:53"
+
+# Upstream DNS resolver for non-blocked queries.
+#   Google:     "8.8.8.8:53"
+#   Cloudflare: "1.1.1.1:53"
+#   Quad9:      "9.9.9.9:53"
+upstream_dns = "8.8.8.8:53"
+
+# Path to your custom blocklist file (one domain per line).
+# Relative paths are resolved from this config file's directory.
+blocklist_path = "blocklists/default.txt"
+
+# Logging verbosity. Options: "error", "warn", "info", "debug", "trace"
+log_level = "info"
+
+# Address for the admin web dashboard and API.
+admin_addr = "0.0.0.0:9090"

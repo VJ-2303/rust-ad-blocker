@@ -1,4 +1,4 @@
-use axum::{Json, extract::State};
+use axum::{Json, extract::{Path, State}};
 use serde::{Deserialize, Serialize};
 
 use crate::admin::state::AppState;
@@ -49,24 +49,24 @@ pub async fn add_custom_domain(
 }
 
 pub async fn remove_custom_domain(
+    Path(domain): Path<String>,
     State(state): State<AppState>,
-    Json(payload): Json<AddDomainRequest>,
 ) -> Json<StatusResponse> {
-    if payload.domain.is_empty() {
+    if domain.is_empty() {
         return Json(StatusResponse {
             status: "error".to_string(),
             message: "Domain cannot be empty".to_string(),
         });
     }
 
-    match state.blocklist.remove_custom_domain(&payload.domain).await {
+    match state.blocklist.remove_custom_domain(&domain).await {
         Ok(true) => Json(StatusResponse {
             status: "success".to_string(),
-            message: format!("Successfully unblocked {}", payload.domain),
+            message: format!("Successfully unblocked {}", domain),
         }),
         Ok(false) => Json(StatusResponse {
             status: "not_found".to_string(),
-            message: format!("'{}' was not in the custom blocklist", payload.domain),
+            message: format!("'{}' was not in the custom blocklist", domain),
         }),
         Err(e) => Json(StatusResponse {
             status: "error".to_string(),
