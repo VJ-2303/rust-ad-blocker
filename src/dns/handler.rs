@@ -29,18 +29,8 @@ pub async fn handle_query(packet_bytes: BytesMut, state: &ServerState) -> Result
             .metrics
             .blocked_queries
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let dns_packet = DnsPacket::parse(&packet_bytes)?;
 
-        // let raw_domain = match dns_packet.get_domain() {
-        //     Some(domain) => domain,
-        //     None => return Err(AppError::Dns(DnsError::NoQueries)),
-        // };
-
-        // info!(domain = %raw_domain, status = "BLOCKED", "Query denied by blocklist");
-
-        let response = dns_packet.make_nxdomain();
-        let bytes = response.serialize()?;
-        Ok(bytes::Bytes::from(bytes))
+        Ok(build_nxdomain_raw(&packet_bytes))
     } else {
         if let Some(cached_bytes) = state.cache.get(&domain_bytes, &packet_bytes[0..2]) {
             state
@@ -91,4 +81,33 @@ pub async fn handle_query(packet_bytes: BytesMut, state: &ServerState) -> Result
             }
         }
     }
+}
+
+fn build_nxdomain_raw(query: &[u8]) -> Bytes {
+    // Find end of question section: skip labels until null terminator, then +4 for QTYPE+QCLASS
+    let mut i = 12;
+    while i < query.len() && query[i] != 0 {
+        i += query[i] as usize + 1;
+    }
+    let question_end = i + 1 + 4; // null byte + QTYPE(2) + QCLASS(2)
+
+    let response_len = question_end; // header(12) + question section
+    let mut buf = BytesMut::with_capacity(response_len);
+
+    // Transaction ID — same as query
+    buf.extend_from_slice(&query[0..2]);
+
+    // Flags: QR=1, Opcode=0, AA=0, TC=0, RD=1 | RA=1, Z=0, RCODE=3 (NXDOMAIN)
+    buf.extend_from_slice(&[0x81, 0x83]);
+
+    // QDCOUNT — keep from query (usually 0x00 0x01)
+    buf.extend_from_slice(&query[4..6]);
+
+    // ANCOUNT, NSCOUNT, ARCOUNT — all zero
+    buf.extend_from_slice(&[0, 0, 0, 0, 0, 0]);
+
+    // Question section — verbatim copy from query
+    buf.extend_from_slice(&query[12..question_end]);
+
+    buf.freeze()
 }
