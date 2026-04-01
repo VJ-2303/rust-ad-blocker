@@ -22,6 +22,12 @@ use crate::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Check for version command
+    if std::env::args().any(|arg| arg == "--version") {
+        println!("{}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     let config_path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "config.toml".to_string());

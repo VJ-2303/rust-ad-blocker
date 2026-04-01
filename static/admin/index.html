@@ -1,120 +1,132 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AdBloacker</title>
-    <link rel="stylesheet" href="/admin/styles.css" />
-  </head>
-  <body>
-    <div class="shell">
-      <header class="header">
-        <h1 class="wordmark">AdBloacker</h1>
-        <div class="header-end">
-          <span id="api-health" class="status status-unknown">
-            <span class="status-dot"></span>Checking…
-          </span>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>CrabShield</title>
+        <link rel="stylesheet" href="/admin/styles.css" />
+    </head>
+    <body>
+        <div class="shell">
+            <header class="header">
+                <h1 class="wordmark">CrabShield</h1>
+                <div class="header-end">
+                    <span id="api-health" class="status status-unknown">
+                        <span class="status-dot"></span>Checking…
+                    </span>
+                </div>
+            </header>
+
+            <section class="summary" id="summary-bar">
+                <div class="summary-stat">
+                    <span class="summary-label">Queries</span>
+                    <span class="summary-value" id="stat-queries">–</span>
+                </div>
+                <div class="summary-stat">
+                    <span class="summary-label">Blocked</span>
+                    <span class="summary-value" id="stat-blocked">–</span>
+                    <span class="summary-sub" id="stat-block-pct"></span>
+                </div>
+                <div class="summary-stat">
+                    <span class="summary-label">Cache Hit Rate</span>
+                    <span class="summary-value" id="stat-cache-rate">–</span>
+                </div>
+                <div class="summary-stat">
+                    <span class="summary-label">Domains in Blocklist</span>
+                    <span class="summary-value" id="stat-domains-count">–</span>
+                </div>
+            </section>
+
+            <main class="columns">
+                <section class="col col-metrics">
+                    <div class="col-header">
+                        <h2>DNS Metrics</h2>
+                        <button
+                            id="refresh-btn"
+                            class="btn-ghost"
+                            type="button"
+                        >
+                            Refresh
+                        </button>
+                    </div>
+
+                    <dl class="metrics-list">
+                        <div class="metric-row">
+                            <dt>Total Queries</dt>
+                            <dd id="m-total">–</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Blocked Queries</dt>
+                            <dd id="m-blocked">–</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Cache Hits</dt>
+                            <dd id="m-cache-hits">–</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Cache Misses</dt>
+                            <dd id="m-cache-misses">–</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Avg Latency</dt>
+                            <dd id="m-latency">–</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Upstream Errors</dt>
+                            <dd id="m-errors" class="val-error">–</dd>
+                        </div>
+                        <div class="metric-row">
+                            <dt>Uptime</dt>
+                            <dd id="m-uptime">–</dd>
+                        </div>
+                    </dl>
+
+                    <p class="ts" id="last-updated">Last updated: –</p>
+                </section>
+
+                <section class="col col-domains">
+                    <div class="col-header">
+                        <h2>Custom Blocklist</h2>
+                        <span class="badge" id="domain-count">0</span>
+                    </div>
+
+                    <form
+                        id="add-domain-form"
+                        class="add-row"
+                        autocomplete="off"
+                    >
+                        <label for="domain-input" class="sr-only"
+                            >Domain to block</label
+                        >
+                        <input
+                            id="domain-input"
+                            name="domain"
+                            type="text"
+                            inputmode="url"
+                            placeholder="example.com"
+                            required
+                        />
+                        <button class="btn-solid" type="submit">Block</button>
+                    </form>
+
+                    <div class="filter-row">
+                        <input
+                            id="domain-search"
+                            type="search"
+                            placeholder="Filter domains…"
+                        />
+                    </div>
+
+                    <div class="domain-list-wrap">
+                        <ul id="domain-list" class="domain-list">
+                            <li class="empty-msg">Loading…</li>
+                        </ul>
+                    </div>
+                </section>
+            </main>
         </div>
-      </header>
 
-      <section class="summary" id="summary-bar">
-        <div class="summary-stat">
-          <span class="summary-label">Queries</span>
-          <span class="summary-value" id="stat-queries">–</span>
-        </div>
-        <div class="summary-stat">
-          <span class="summary-label">Blocked</span>
-          <span class="summary-value" id="stat-blocked">–</span>
-          <span class="summary-sub" id="stat-block-pct"></span>
-        </div>
-        <div class="summary-stat">
-          <span class="summary-label">Cache Hit Rate</span>
-          <span class="summary-value" id="stat-cache-rate">–</span>
-        </div>
-        <div class="summary-stat">
-          <span class="summary-label">Domains in Blocklist</span>
-          <span class="summary-value" id="stat-domains-count">–</span>
-        </div>
-      </section>
-
-      <main class="columns">
-        <section class="col col-metrics">
-          <div class="col-header">
-            <h2>DNS Metrics</h2>
-            <button id="refresh-btn" class="btn-ghost" type="button">Refresh</button>
-          </div>
-
-          <dl class="metrics-list">
-            <div class="metric-row">
-              <dt>Total Queries</dt>
-              <dd id="m-total">–</dd>
-            </div>
-            <div class="metric-row">
-              <dt>Blocked Queries</dt>
-              <dd id="m-blocked">–</dd>
-            </div>
-            <div class="metric-row">
-              <dt>Cache Hits</dt>
-              <dd id="m-cache-hits">–</dd>
-            </div>
-            <div class="metric-row">
-              <dt>Cache Misses</dt>
-              <dd id="m-cache-misses">–</dd>
-            </div>
-            <div class="metric-row">
-              <dt>Avg Latency</dt>
-              <dd id="m-latency">–</dd>
-            </div>
-            <div class="metric-row">
-              <dt>Upstream Errors</dt>
-              <dd id="m-errors" class="val-error">–</dd>
-            </div>
-            <div class="metric-row">
-              <dt>Uptime</dt>
-              <dd id="m-uptime">–</dd>
-            </div>
-          </dl>
-
-          <p class="ts" id="last-updated">Last updated: –</p>
-        </section>
-
-        <section class="col col-domains">
-          <div class="col-header">
-            <h2>Custom Blocklist</h2>
-            <span class="badge" id="domain-count">0</span>
-          </div>
-
-          <form id="add-domain-form" class="add-row" autocomplete="off">
-            <label for="domain-input" class="sr-only">Domain to block</label>
-            <input
-              id="domain-input"
-              name="domain"
-              type="text"
-              inputmode="url"
-              placeholder="example.com"
-              required
-            />
-            <button class="btn-solid" type="submit">Block</button>
-          </form>
-
-          <div class="filter-row">
-            <input
-              id="domain-search"
-              type="search"
-              placeholder="Filter domains…"
-            />
-          </div>
-
-          <div class="domain-list-wrap">
-            <ul id="domain-list" class="domain-list">
-              <li class="empty-msg">Loading…</li>
-            </ul>
-          </div>
-        </section>
-      </main>
-    </div>
-
-    <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
-    <script src="/admin/app.js" defer></script>
-  </body>
+        <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+        <script src="/admin/app.js" defer></script>
+    </body>
 </html>

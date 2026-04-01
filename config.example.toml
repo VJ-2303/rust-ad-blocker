@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────
-# AdBloacker Configuration Example File
+# CrabShield Configuration Example File
 # ─────────────────────────────────────────────
 # The address and port the DNS server listens on.
 #   - "127.0.0.1:53"   → only accept local queries

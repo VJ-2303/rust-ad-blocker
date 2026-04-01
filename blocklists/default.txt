@@ -1,4 +1,7 @@
-# Custom blocked domains
+# Example Custom blocked domains
+# Commands Starts With '#'
+# One Domain per line
 
 reddit.com
 zed.dev
+google.com
