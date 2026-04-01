@@ -16,23 +16,77 @@ Intercepts domain resolution requests before they reach the internet. Blocked do
 **Intelligent Caching**  
 LRU-based cache with TTL respect reduces upstream DNS queries by storing recent lookups. The cache automatically expires entries and cleans stale data, keeping memory usage bounded while maximizing hit rates.
 
-**Upstream Multiplexing**  
-Two-socket multiplexer design handles concurrent upstream queries efficiently. Each query gets a unique transaction ID, allowing parallel resolution without blocking.
-
 **Dynamic Blocklist Updates**  
 Automatically fetches updated blocklists from the internet every 24 hours. The system attempts three retries with backoff if fetching fails, ensuring your protection stays current without manual intervention.
 
 **Custom Domain Management**  
 Add or remove domains through the admin API. Custom additions persist to disk and survive restarts. The blocklist separates user-defined domains from fetched lists, allowing you to merge both sources seamlessly.
 
-**Real-Time Metrics**  
-Tracks total queries, blocked requests, cache performance, upstream latency, and errors. All metrics update atomically without locks on the hot path, ensuring measurement doesn't slow down query processing.
-
 **Web Dashboard**  
 Embedded admin interface served on a configurable port. View statistics, monitor performance, manage custom blocked domains—all through a clean web UI bundled into the binary at compile time.
 
 **Concurrent Safety**  
 RwLock-protected blocklist and LRU cache allow multiple readers simultaneously. Writes lock briefly, and atomic counters track metrics without contention. The entire server is built on Tokio's async runtime for efficient concurrency.
+
+---
+
+## Setup Instructions
+
+### Linux 
+
+```bash
+curl -sSL https://raw.githubusercontent.com/VJ-2303/CrabShield/main/install.sh | sudo bash
+```
+
+### Windows
+
+```powershell
+irm https://raw.githubusercontent.com/VJ-2303/CrabShield/main/install.ps1 | iex
+```
+
+### Verify Installation
+
+```bash
+# Linux
+CrabShield --version
+
+# Windows (PowerShell)
+CrabShield.exe --version
+```
+
+Key settings in `config.toml`:
+
+```toml
+listen_addr = "0.0.0.0:53"          # DNS server address
+upstream_dns = "8.8.8.8:53"         # Upstream resolver
+blocklist_path = "blocklists/default.txt"
+log_level = "info"
+admin_addr = "0.0.0.0:9090"         # Web dashboard
+```
+
+**Running the Server**
+
+On Linux (requires root for port 53):
+```bash
+CrabShield path_to_the_config_file
+```
+
+On Windows:
+```powershell
+CrabShield.exe path_to_the_config_file
+```
+
+**Configure Your Devices**
+
+Point your device DNS settings to the machine running CrabShield. You can set this per-device or configure your router's DHCP to advertise CrabShield as the network DNS server.
+
+**Access the Dashboard**
+
+Open `http://<server-ip>:9090/admin` in your browser to view statistics and manage custom domains.
+
+![Admin Web](https://raw.githubusercontent.com/VJ-2303/CrabShield/refs/heads/main/demo/admin_page.png)
+
+---
 
 ## Technical Architecture
 
@@ -50,6 +104,8 @@ Two separate UDP sockets bind to random ports for upstream communication. A Dash
 
 **Web Stack**  
 Axum handles HTTP routing with minimal overhead. Static assets embed at compile time via include_dir, eliminating runtime file I/O. JSON endpoints return metrics and handle domain management operations.
+
+---
 
 ## Technology Stack
 
@@ -73,6 +129,8 @@ Rust with Tokio async runtime provides memory safety, zero-cost abstractions, an
 - **toml**: Human-readable config file parsing
 - **tracing**: Structured logging with dynamic levels
 
+---
+
 ## Performance Characteristics
 
 **Query Latency**  
@@ -84,79 +142,7 @@ A blocklist with 100,000 domains consumes roughly 15-20MB. The LRU cache caps at
 **Throughput**  
 The async architecture handles thousands of concurrent queries without spawning threads per request. Atomic metrics and lock-free pending request tracking keep contention minimal. On a typical home network, a single instance easily saturates gigabit bandwidth before becoming CPU-bound.
 
-## Setup Instructions
-
-**Prerequisites**  
-- Rust toolchain (1.70 or later)
-- Port 53 available (requires root/sudo on Linux)
-- Network access for fetching blocklists
-
-**Build from Source**
-
-```bash
-git clone <repository-url>
-cd CrabShield
-cargo build --release
-```
-
-The optimized binary will be at `target/release/CrabShield`.
-
-**Configuration**
-
-Copy the example config and adjust to your needs:
-
-```bash
-cp config.example.toml config.toml
-```
-
-Key settings in `config.toml`:
-
-```toml
-listen_addr = "0.0.0.0:53"          # DNS server address
-upstream_dns = "8.8.8.8:53"         # Upstream resolver
-blocklist_path = "blocklists/default.txt"
-log_level = "info"
-admin_addr = "0.0.0.0:9090"         # Web dashboard
-```
-
-**Running the Server**
-
-On Linux (requires root for port 53):
-```bash
-sudo ./target/release/CrabShield config.toml
-```
-
-For testing without root, change `listen_addr` to a high port like `8053`:
-```bash
-./target/release/CrabShield config.toml
-```
-
-**Configure Your Devices**
-
-Point your device DNS settings to the machine running CrabShield. You can set this per-device or configure your router's DHCP to advertise CrabShield as the network DNS server.
-
-**Access the Dashboard**
-
-Open `http://<server-ip>:9090/admin` in your browser to view statistics and manage custom domains.
-
-## Usage Examples
-
-**Adding Custom Domains**
-
-Via the web dashboard or using curl:
-```bash
-curl -X POST http://localhost:9090/api/domains \
-  -H "Content-Type: application/json" \
-  -d '{"domain": "unwanted-site.com"}'
-```
-
-**Viewing Statistics**
-
-```bash
-curl http://localhost:9090/api/stats | jq
-```
-
-Returns metrics including query counts, block rate, cache hit percentage, and average upstream latency.
+---
 
 ## Future Improvements
 
@@ -169,14 +155,10 @@ Explicit allowlist to override blocklist entries. Useful when legitimate domains
 **Sharded Cache**  
 Partition the LRU cache into multiple shards based on domain hash. Reduces lock contention on high-traffic deployments by allowing parallel cache operations.
 
-**DNSSEC Validation**  
-Validate DNSSEC signatures on upstream responses. Protect against DNS spoofing and ensure cryptographic integrity of responses.
-
 **Multiple Blocklist Sources**  
 Configure multiple blocklist URLs with different update intervals. Merge lists from different providers and allow per-list enable/disable.
 
-**IPv6 Support**  
-Full IPv6 query handling and AAAA record support. Currently focused on IPv4, but extending to dual-stack is straightforward.
+---
 
 ## Contributing
 
