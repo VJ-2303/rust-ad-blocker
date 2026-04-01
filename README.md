@@ -35,13 +35,13 @@ RwLock-protected blocklist and LRU cache allow multiple readers simultaneously. 
 ### Linux 
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/VJ-2303/CrabShield/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/VJ-2303/CrabShield/main/scripts/install.sh | sudo bash
 ```
 
 ### Windows
 
 ```powershell
-irm https://raw.githubusercontent.com/VJ-2303/CrabShield/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/VJ-2303/CrabShield/main/scripts/install.ps1 | iex
 ```
 
 ### Verify Installation
