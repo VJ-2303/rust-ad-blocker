@@ -90,6 +90,29 @@ Open `http://<server-ip>:9090/admin` in your browser to view statistics and mana
 
 ## Technical Architecture
 
+```mermaid
+graph TB
+    Client["DNS Client<br/>(Browser/OS)"] -->|"UDP :8053"| Server["DNS Server<br/>server.rs"]
+    Server --> Handler["Query Handler<br/>handler.rs"]
+    Handler --> BL{"Blocklist<br/>Check"}
+    BL -->|"Blocked"| NX["Return NXDOMAIN"]
+    BL -->|"Allowed"| Cache{"LRU Cache<br/>Check"}
+    Cache -->|"Hit"| CResp["Return Cached"]
+    Cache -->|"Miss"| Mux["Upstream Multiplexer<br/>upstream.rs"]
+    Mux -->|"UDP"| Upstream["Google DNS<br/>8.8.8.8:53"]
+    Upstream -->|"Response"| Mux
+    Mux -->|"Cache + Return"| Handler
+
+    Admin["Admin Dashboard<br/>:9090"] -->|"HTTP/JSON"| Axum["Axum Web Server<br/>routes.rs"]
+    Axum --> Metrics["Metrics<br/>(Atomic Counters)"]
+    Axum --> BLAdmin["Blocklist CRUD"]
+
+    Fetcher["Background Task"] -->|"Every 24h"| Remote["StevenBlack/hosts<br/>(GitHub)"]
+    Remote --> BL
+
+    Cleaner["Cache Cleaner"] -->|"Every 60s"| Cache
+```
+
 **DNS Protocol Handling**  
 Parses DNS queries at the byte level without heavyweight libraries. Extracts domain names from the question section, maintains transaction IDs, and constructs NXDOMAIN responses manually. This low-level approach eliminates dependencies and keeps the binary small.
 
@@ -115,8 +138,6 @@ Rust with Tokio async runtime provides memory safety, zero-cost abstractions, an
 **Core Dependencies**  
 - **tokio**: Async I/O, UDP/TCP sockets, task scheduling
 - **bytes**: Zero-copy buffer operations for DNS packets
-- **parking_lot**: Fast RwLock and Mutex implementations
-- **ahash**: Optimized hash function for domain lookups
 - **dashmap**: Lock-free concurrent hashmap for pending requests
 - **lru**: Least-recently-used cache eviction policy
 
